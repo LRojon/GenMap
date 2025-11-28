@@ -1,4 +1,6 @@
 import pygame
+import cProfile
+import pstats
 from typing import Optional
 import os
 from datetime import datetime
@@ -10,6 +12,9 @@ from skimage.draw import polygon
 from map import Map
 import time
 import pygame
+import sys
+
+seed = sys.argv[1] if len(sys.argv) > 1 else None
 
 pygame.init()
 width, height = 400, 400
@@ -18,10 +23,11 @@ pygame.display.set_caption("Map")
 
 startTime = time.time()
 elapsed = 0.0
-seed = time.time_ns() % (2**32)
+seed = int(seed) if seed is not None else time.time_ns() % (2**32)
 map = Map(width, height, seed)
 elapsed += time.time() - startTime
-print(f"Map générée en {elapsed:.2f} secondes avec le seed {seed}")
+print(f"Génération de la map en {time.time() - startTime:.2f}s avec le seed {seed}")
+startTime = time.time()
     
 running = True
 while running:
