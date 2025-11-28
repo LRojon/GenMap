@@ -14,13 +14,13 @@ class Map:
         self.rivers: list[list[tuple[int, int]]] = []
         self.width = width
         self.height = height
-        self.map, self.seed, self.rivers = self.generate(self.seed)
+        self.map, self.seed, self.rivers, self.cities = self.generate(self.seed)
 
     def generate(
         self,
         seed: int = 0, 
         erosionPasses: int = 200,
-    ) -> tuple[list[list[int]], int, list[list[tuple[int, int]]]]:
+    ) -> tuple[list[list[int]], int, list[list[tuple[int, int]]], Cities]:
 
         # ========== Génération du terrain ==========
         self.map, self.seed = self.genTerrain(octaves=8)
@@ -43,8 +43,12 @@ class Map:
             if river:
                 self.rivers.append(river)
 
+        # ========== Placement des villes ==========
+        nbCities = (self.width * self.height) // 10000
+        self.placeCities(nbCities)
 
-        return self.map, self.seed, self.rivers
+
+        return self.map, self.seed, self.rivers, self.cities
 
     def genTerrain(self, octaves: int = 8, persistence: float = 0.5, scale: float = 0.005) -> tuple[list[list[int]], int]:
         map = [[0 for _ in range(self.width)] for _ in range(self.height)]
@@ -236,33 +240,20 @@ class Map:
                                 erosion = 3 if dist == 0 else (2 if dist == 1 else 1)
                                 self.map[ny][nx] = max(Map.SEA_LEVEL + 1, self.map[ny][nx] - erosion)
     
-    @staticmethod
-    def placeCities(map: list[list[int]], rivers: list[list[tuple[int, int]]], 
-                    cities, num_cities: int, seed: int = 0) -> None:
+    def placeCities(self, num_cities: int) -> None:
         """
-        Place des villes de manière intelligente sur la carte.
-        Les villes sont placées près des rivières, des côtes, et évitent les montagnes.
-        
-        Args:
-            map: Tableau 2D des hauteurs (0-255)
-            rivers: Liste des rivières existantes
-            cities: Instance de Cities où ajouter les villes
-            num_cities: Nombre de villes à placer
-            seed: Seed pour la génération aléatoire
+        Place des villes de manière intelligente avec une part d'aléatoire.
         """
-        if seed != 0:
-            random.seed(seed)
-        
-        height = len(map)
-        width = len(map[0])
+        height = len(self.map)
+        width = len(self.map[0])
         
         # Convertir les rivières en set pour recherche rapide
         river_tiles = set()
-        for river in rivers:
+        for river in self.rivers:
             river_tiles.update(river)
         
         # Calculer une carte de scores pour chaque position
-        score_map = Map._calculate_city_scores(map, river_tiles, width, height)
+        score_map = self._calculate_city_scores(river_tiles)
         
         # Créer une liste de candidats avec leurs scores
         candidates = []
@@ -271,148 +262,181 @@ class Map:
                 if score_map[y][x] > 0:
                     candidates.append(((x, y), score_map[y][x]))
         
-        # Trier par score décroissant
-        candidates.sort(key=lambda c: c[1], reverse=True)
+        if not candidates:
+            return  # Pas de position valide
         
-        # Placer les villes en respectant une distance minimale
+        # Ne pas trier, mais utiliser une sélection pondérée par le score
         placed_cities = []
         min_distance = max(width, height) // 20  # Distance minimale entre villes
         
-        for position, score in candidates:
-            if len(placed_cities) >= num_cities:
+        attempts = 0
+        max_attempts = num_cities * 20  # Limiter les tentatives
+        
+        while len(placed_cities) < num_cities and attempts < max_attempts:
+            attempts += 1
+            
+            # Sélection pondérée : plus le score est élevé, plus la probabilité est grande
+            # Mais on ne prend pas systématiquement le meilleur
+            
+            # Calculer les poids (score^2 pour accentuer les bonnes positions)
+            total_weight = sum(score ** 1.5 for _, score in candidates)
+            
+            if total_weight == 0:
                 break
+            
+            # Sélection aléatoire pondérée
+            rand = random.random() * total_weight
+            cumulative = 0
+            selected_position = None
+            
+            for position, score in candidates:
+                cumulative += score ** 1.5
+                if cumulative >= rand:
+                    selected_position = position
+                    break
+            
+            if not selected_position:
+                continue
             
             # Vérifier la distance avec les villes déjà placées
             too_close = False
             for existing_city in placed_cities:
-                dist = math.sqrt((position[0] - existing_city[0])**2 + 
-                               (position[1] - existing_city[1])**2)
+                dist = math.sqrt((selected_position[0] - existing_city[0])**2 + 
+                            (selected_position[1] - existing_city[1])**2)
                 if dist < min_distance:
                     too_close = True
                     break
             
             if not too_close:
-                placed_cities.append(position)
-                cities.generateCity(position, seed=random.randint(0, 2**31))
-    
-    @staticmethod
-    def _calculate_city_scores(map: list[list[int]], river_tiles: set, 
-                               width: int, height: int) -> list[list[float]]:
+                placed_cities.append(selected_position)
+                self.cities.generateCity(selected_position, seed=random.randint(0, 2**31))
+                
+                # Retirer la position et ses voisins proches des candidats
+                candidates = [
+                    (pos, sc) for pos, sc in candidates 
+                    if math.sqrt((pos[0] - selected_position[0])**2 + 
+                            (pos[1] - selected_position[1])**2) >= min_distance
+                ]
+                
+                if not candidates:
+                    break
+
+    def _calculate_city_scores(self, river_tiles: set) -> list[list[float]]:
         """
-        Calcule un score pour chaque position basé sur plusieurs critères :
-        - Proximité aux rivières (bonus important)
-        - Proximité aux côtes (bonus moyen)
-        - Altitude (préférence pour terrain plat, pas trop haut)
-        - Éviter l'eau et les montagnes
+        Calcule un score pour chaque position avec de l'aléatoire.
         """
-        score_map = [[0.0 for _ in range(width)] for _ in range(height)]
+        score_map = [[0.0 for _ in range(len(self.map[0]))] for _ in range(len(self.map))]
         
-        for y in range(height):
-            for x in range(width):
-                terrain_height = map[y][x]
+        for y in range(len(self.map)):
+            for x in range(len(self.map[0])):
+                terrain_height = self.map[y][x]
                 
                 # Conditions de base : pas dans l'eau, pas trop haut
                 if terrain_height <= Map.SEA_LEVEL:
-                    continue  # Pas de ville dans l'eau
+                    continue
                 
                 if terrain_height > 180:
-                    continue  # Pas de ville en haute montagne
+                    continue
                 
-                score = 100.0  # Score de base
+                score = 50.0  # Score de base réduit
                 
                 # 1. Bonus altitude idéale (130-160 = plaines)
                 if 130 <= terrain_height <= 160:
-                    score += 50
+                    score += 40
                 elif 160 < terrain_height <= 170:
                     score += 20
                 else:
-                    score -= (terrain_height - 160) * 0.5  # Pénalité si trop haut
+                    score -= (terrain_height - 160) * 0.3
                 
-                # 2. Bonus proximité rivière (très important)
+                # 2. Bonus proximité rivière
                 min_river_dist = float('inf')
                 for rx, ry in river_tiles:
-                    dist = abs(x - rx) + abs(y - ry)  # Distance Manhattan
+                    dist = abs(x - rx) + abs(y - ry)
                     if dist < min_river_dist:
                         min_river_dist = dist
                 
-                if min_river_dist <= 2:
-                    score += 150  # Très proche d'une rivière
-                elif min_river_dist <= 5:
-                    score += 80
-                elif min_river_dist <= 10:
-                    score += 40
-                elif min_river_dist <= 20:
+                if min_river_dist != float('inf'):
+                    if min_river_dist <= 2:
+                        score += 80
+                    elif min_river_dist <= 5:
+                        score += 50
+                    elif min_river_dist <= 10:
+                        score += 25
+                    elif min_river_dist <= 20:
+                        score += 10
+                
+                # 3. Bonus proximité côte (réduit pour équilibrer)
+                coast_dist = self._distance_to_coast(x, y)
+                if coast_dist <= 3:
+                    score += 60  # Réduit de 100 à 60
+                elif coast_dist <= 10:
+                    score += 30
+                elif coast_dist <= 20:
                     score += 10
                 
-                # 3. Bonus proximité côte
-                coast_dist = Map._distance_to_coast(map, x, y, width, height)
-                if coast_dist <= 3:
-                    score += 100  # Ville côtière
-                elif coast_dist <= 10:
-                    score += 50
-                elif coast_dist <= 20:
-                    score += 20
-                
-                # 4. Pénalité si terrain trop accidenté autour
-                terrain_variation = Map._calculate_terrain_variation(map, x, y, width, height)
+                # 4. Pénalité terrain accidenté
+                terrain_variation = self._calculate_terrain_variation(x, y)
                 if terrain_variation > 30:
-                    score -= 50  # Terrain trop accidenté
+                    score -= 30
                 elif terrain_variation > 15:
-                    score -= 20
+                    score -= 15
                 
-                # 5. Bonus si confluence de rivières à proximité
-                if Map._is_near_river_confluence(river_tiles, x, y):
-                    score += 100
+                # 5. Bonus confluence
+                if self._is_near_river_confluence(river_tiles, x, y):
+                    score += 50
+                
+                # 6. IMPORTANT : Ajouter un facteur aléatoire (±30%)
+                random_factor = random.uniform(0.7, 1.3)
+                score *= random_factor
+                
+                # 7. Bonus aléatoire pour créer des villes "surprises"
+                if random.random() < 0.05:  # 5% de chance
+                    score += random.uniform(20, 60)
                 
                 score_map[y][x] = max(0, score)
         
         return score_map
-    
-    @staticmethod
-    def _distance_to_coast(map: list[list[int]], x: int, y: int, 
-                          width: int, height: int) -> int:
-        """Calcule la distance approximative à la côte la plus proche."""
-        search_radius = 25
+
+    def _distance_to_coast(self, x: int, y: int) -> int:
+        """Calcule la distance à la côte (version optimisée)."""
+        search_radius = 20  # Réduit de 25 à 20
         min_dist = search_radius
         
-        for dy in range(-search_radius, search_radius + 1):
-            for dx in range(-search_radius, search_radius + 1):
-                nx, ny = x + dx, y + dy
-                if 0 <= nx < width and 0 <= ny < height:
-                    # Vérifier s'il y a de l'eau adjacente à de la terre
-                    if map[ny][nx] <= Map.SEA_LEVEL:
-                        # C'est de l'eau, vérifier s'il y a de la terre à côté
-                        for ddx, ddy in [(-1,0), (1,0), (0,-1), (0,1)]:
-                            nnx, nny = nx + ddx, ny + ddy
-                            if 0 <= nnx < width and 0 <= nny < height:
-                                if map[nny][nnx] > Map.SEA_LEVEL:
-                                    # C'est une côte
-                                    dist = abs(dx) + abs(dy)
-                                    if dist < min_dist:
-                                        min_dist = dist
+        # Recherche en cercles concentriques (plus efficace)
+        for radius in range(1, search_radius + 1):
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    if abs(dx) + abs(dy) > radius:
+                        continue
+                        
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < len(self.map[0]) and 0 <= ny < len(self.map):
+                        if self.map[ny][nx] <= Map.SEA_LEVEL:
+                            # Vérifier si c'est bien une côte (terre adjacente)
+                            for ddx, ddy in [(-1,0), (1,0), (0,-1), (0,1)]:
+                                nnx, nny = nx + ddx, ny + ddy
+                                if 0 <= nnx < len(self.map[0]) and 0 <= nny < len(self.map):
+                                    if self.map[nny][nnx] > Map.SEA_LEVEL:
+                                        return abs(dx) + abs(dy)
         
         return min_dist
-    
-    @staticmethod
-    def _calculate_terrain_variation(map: list[list[int]], x: int, y: int,
-                                     width: int, height: int) -> float:
+
+    def _calculate_terrain_variation(self, x: int, y: int) -> float:
         """Calcule la variation de hauteur dans un rayon de 3 pixels."""
         heights = []
         for dy in range(-3, 4):
             for dx in range(-3, 4):
                 nx, ny = x + dx, y + dy
-                if 0 <= nx < width and 0 <= ny < height:
-                    heights.append(map[ny][nx])
+                if 0 <= nx < len(self.map[0]) and 0 <= ny < len(self.map):
+                    heights.append(self.map[ny][nx])
         
         if not heights:
             return 0
         
         return max(heights) - min(heights)
-    
-    @staticmethod
-    def _is_near_river_confluence(river_tiles: set, x: int, y: int) -> bool:
-        """Détecte si la position est près d'une confluence de rivières."""
-        # Compter le nombre de segments de rivière différents à proximité
+
+    def _is_near_river_confluence(self, river_tiles: set, x: int, y: int) -> bool:
+        """Détecte une confluence de rivières."""
         nearby_river_segments = 0
         search_radius = 5
         
@@ -421,5 +445,4 @@ class Map:
                 if (x + dx, y + dy) in river_tiles:
                     nearby_river_segments += 1
         
-        # Si beaucoup de tuiles de rivière à proximité, c'est probablement une confluence
         return nearby_river_segments > 8

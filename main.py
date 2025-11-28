@@ -18,8 +18,10 @@ pygame.display.set_caption("Map")
 
 startTime = time.time()
 elapsed = 0.0
-seed = pygame.time.get_ticks()
+seed = time.time_ns() % (2**32)
 map = Map(width, height, seed)
+elapsed += time.time() - startTime
+print(f"Map générée en {elapsed:.2f} secondes avec le seed {seed}")
     
 running = True
 while running:
@@ -42,6 +44,9 @@ while running:
     for river in map.rivers:
         for i in range(len(river)):
             window.set_at(river[i], Colors.getColor(127))
+    
+    for city in map.cities.cities:
+        pygame.draw.circle(window, (255, 0, 0), city.position, 3)
 
     # for cell in world.cells:
     #     if len(cell.vertices) >= 3:
