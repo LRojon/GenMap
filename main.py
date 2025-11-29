@@ -1,13 +1,7 @@
-import pygame
-import cProfile
-import pstats
-from typing import Optional
 import os
 from datetime import datetime
-from astar import AStar, find_path
 from colors import Colors
 from voronoi import Voronoi, Cell, Edge
-import numpy as np
 from skimage.draw import polygon
 from map import Map
 import time
@@ -17,7 +11,7 @@ import sys
 seed = sys.argv[1] if len(sys.argv) > 1 else None
 
 pygame.init()
-width, height = 400, 400
+width, height = 800, 800
 window = pygame.display.set_mode((width, height))
 pygame.display.set_caption("Map")
 
@@ -41,7 +35,7 @@ while running:
                 pygame.image.save(window, filename)
                 print(f"Screenshot sauvegardé : {filename}")
 
-    window.fill(Colors.getColor(0))
+    window.fill(Colors.getColor(255))
 
     for y in range(height):
         for x in range(width):

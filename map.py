@@ -1,6 +1,7 @@
 import numpy as np
 import random
 import time
+from scipy.ndimage import median_filter, minimum_filter, distance_transform_edt
 from noise import PerlinNoise
 from city import Cities
 
@@ -19,15 +20,17 @@ class Map:
     def generate(self, seed: int = 0, erosionPasses: int = 200):
         random.seed(seed)
         np.random.seed(seed)
+        starttime = time.time()
         
         # ========== Génération du terrain (vectorisé) ==========
         self.map, self.seed = self.genTerrain(octaves=8)
+        print(f"Terrain généré en {time.time() - starttime:.2f}s")
+        starttime = time.time()
         
         # === Variations avec Perlin (vectorisé) ===
         self.map = self.genVariations(octaves=6, persistence=0.5, scale=0.01)
-
-        # ========== Erosion hydraulique (optimisée) ========== 
-        self.map = self.genErosion(erosionPasses)
+        print(f"Variations générées en {time.time() - starttime:.2f}s")
+        starttime = time.time()
 
         # ========== Génération des rivières ==========
         river_count = 1 + int((self.width + self.height) / 2) // 100
@@ -42,11 +45,17 @@ class Map:
             river = self.genRiver(start, 5)
             if river:
                 self.rivers.append(river)
-
+        
+        print(f"Rivières générée en {time.time() - starttime:.2f}s")
+        starttime = time.time()
         # ========== Placement des villes ==========
         nbCities = (self.width * self.height) // 10000
+        nbCities = int(nbCities * random.uniform(0.8, 1.2))
         self.placeCities(nbCities)
+        print(f"Villes placées en {time.time() - starttime:.2f}s")
+        starttime = time.time()
 
+        self.map = np.clip(self.map, 0, 255)
         return self.map, self.seed, self.rivers, self.cities
 
     def genTerrain(self, octaves: int = 8, persistence: float = 0.5, scale: float = 0.005):
@@ -67,7 +76,9 @@ class Map:
         
         # Générer le bruit de variation
         variation = noise.octave_noise_grid(self.width, self.height, octaves, persistence, scale)
-        
+        print("min value after variation:", np.min(self.map))
+        print("max value after variation:", np.max(self.map))
+
         # Appliquer la variation
         self.map = (self.map * ((variation + 3) / 2)).astype(np.float32)
         
@@ -83,65 +94,9 @@ class Map:
         self.map = (self.map * factor).astype(np.uint8)
         self.map = np.clip(self.map, 0, 255)
         # Lissage pour supprimer les pics isolés
-        from scipy.ndimage import median_filter
         self.map = median_filter(self.map, size=3)
         return self.map
-    
-    def genErosion(self, iterations: int = 100):
-        """Erosion hydraulique optimisée avec NumPy."""
-        from scipy.ndimage import minimum_filter
-        water = np.zeros((self.height, self.width), dtype=np.float32)
-        sediment = np.zeros((self.height, self.width), dtype=np.float32)
-        rain_amount = 0.01
-        evaporation = 0.02
-        capacity = 2.0
-        erosion_rate = 0.3
-        deposition_rate = 0.1
-        terrain = self.map.astype(np.float32)
 
-        for iteration in range(iterations):
-            water += rain_amount
-            total_height = terrain + water
-            # Trouver le voisin le plus bas pour chaque cellule (hors bord)
-            min_neighbors = minimum_filter(total_height, size=3, mode='nearest')
-            mask = (terrain >= 128) & (total_height > min_neighbors)
-            # Calcul du flux
-            delta = ((total_height - min_neighbors) / 2.0) * mask
-            flow = np.minimum(water, delta)
-            # Trouver où le minimum est atteint (direction du flux)
-            for dy in [-1, 0, 1]:
-                for dx in [-1, 0, 1]:
-                    if dx == 0 and dy == 0:
-                        continue
-                    shifted = np.roll(np.roll(total_height, dy, axis=0), dx, axis=1)
-                    move_mask = (shifted == min_neighbors) & mask
-                    # Appliquer le flux
-                    water[move_mask] -= flow[move_mask]
-                    water = np.roll(water, -dy, axis=0)
-                    water = np.roll(water, -dx, axis=1)
-                    water[move_mask] += flow[move_mask]
-                    water = np.roll(water, dy, axis=0)
-                    water = np.roll(water, dx, axis=1)
-                    # Erosion
-                    max_erosion = np.minimum(terrain, flow * erosion_rate)
-                    sediment[move_mask] += max_erosion[move_mask]
-                    terrain[move_mask] -= max_erosion[move_mask]
-            # Dépôt de sédiments
-            max_sed = water * capacity
-            over_sed = sediment > max_sed
-            deposit = (sediment - max_sed) * deposition_rate * over_sed
-            terrain += deposit
-            sediment -= deposit
-            # Evaporation
-            water *= (1 - evaporation)
-        
-        # Reconvertir en uint8
-        self.map = np.clip(terrain, 0, 255).astype(np.uint8)
-        # Lissage pour combler les trous
-        from scipy.ndimage import median_filter
-        self.map = median_filter(self.map, size=3)
-        return self.map
-    
     def genRiver(self, start: tuple[int, int], seed: int = 0, width: int = 1):
         """Génération de rivière (optimisée)."""
         river_path = [start]
@@ -272,7 +227,9 @@ class Map:
         
         attempts = 0
         max_attempts = num_cities * 20
-        
+
+        starttime = time.time()
+
         while len(placed_cities) < num_cities and attempts < max_attempts:
             attempts += 1
             
@@ -336,7 +293,6 @@ class Map:
         
         # Proximité rivière (vectorisé)
         if river_tiles:
-            from scipy.ndimage import distance_transform_edt
             river_mask = np.ones((self.height, self.width), dtype=bool)
             for rx, ry in river_tiles:
                 river_mask[ry, rx] = False
@@ -348,8 +304,10 @@ class Map:
             score_map += ((river_dist > 10) & (river_dist <= 20)).astype(np.float32) * 10
 
         # Proximité côte (toujours en boucle, car dépend de _distance_to_coast)
-        for y in range(self.height):
-            for x in range(self.width):
+        step = round(self.width * self.height * 0.00003)
+        print("step:", step)
+        for y in range(0, self.height, step):
+            for x in range(0, self.width, step):
                 if not valid_height[y, x]:
                     continue
                 coast_dist = self._distance_to_coast(x, y)
@@ -378,7 +336,6 @@ class Map:
     def _distance_to_coast(self, x: int, y: int) -> int:
         """Distance à la côte."""
         search_radius = 20
-        
         for radius in range(1, search_radius + 1):
             for dy in range(-radius, radius + 1):
                 for dx in range(-radius, radius + 1):

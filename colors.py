@@ -30,8 +30,8 @@ class Colors:
     @staticmethod
     def getColor(value: int):
         colors = Colors.get_instance().colors
-        if value < 0:
-            value = 0
+        if value <= 0:
+            value = 255
         elif value > 255:
             value = 255
         return colors[value]
