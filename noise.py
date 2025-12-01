@@ -49,7 +49,14 @@ class PerlinNoise:
         return self.lerp(x1, x2, v)
     
     def octave_noise_grid(self, width, height, octaves=4, persistence=0.5, scale=0.1):
-        """Génère le bruit d'octave pour une grille complète (ultra-rapide)."""
+        """
+        Génère le bruit d'octave pour une grille complète (ultra-rapide).
+        width: largeur de la grille
+        height: hauteur de la grille
+        octaves: nombre d'octaves
+        persistence: influence de chaque octave
+        scale: échelle du bruit
+        """
         # Créer les grilles de coordonnées une seule fois
         y_coords, x_coords = np.mgrid[0:height, 0:width]
         
