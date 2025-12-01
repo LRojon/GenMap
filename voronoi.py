@@ -45,43 +45,28 @@ class Voronoi:
     def _generate(self, points, width, height):
         from scipy.spatial import Voronoi as SciVoronoi
         import numpy as np
+        from voronoi_utils import voronoi_finite_polygons_2d
+        from shapely.geometry import Polygon, box as shapely_box
         vor = SciVoronoi(points)
-        # Build edges
-        edge_map = {}
-        for (p1, p2), (v1, v2) in zip(vor.ridge_points, vor.ridge_vertices):
-            if v1 == -1 or v2 == -1:
-                continue  # skip infinite edges
-            pt1 = tuple(map(int, vor.vertices[v1]))
-            pt2 = tuple(map(int, vor.vertices[v2]))
-            edge = Edge(pt1, pt2)
-            self.edges.append(edge)
-            edge_map.setdefault(p1, []).append(edge)
-            edge_map.setdefault(p2, []).append(edge)
-        # Build cells
-        # Première passe : construire la liste des indices valides et le mapping point_index -> cell_id
-        valid_indices = []
-        for i, region_index in enumerate(vor.point_region):
-            region = vor.regions[region_index]
-            if -1 in region or len(region) == 0:
+        regions, vertices = voronoi_finite_polygons_2d(vor)
+        rect = shapely_box(0, 0, width, height)
+        # Build cells and edges
+        for cell_idx, (region, pt) in enumerate(zip(regions, points)):
+            polygon = vertices[region]
+            if len(polygon) < 4:
                 continue
-            valid_indices.append(i)
-        point_to_cellid = {i: idx for idx, i in enumerate(valid_indices)}
-
-        # Deuxième passe : créer les cellules avec les bons neighbors
-        for cell_idx, i in enumerate(valid_indices):
-            region_index = vor.point_region[i]
-            region = vor.regions[region_index]
-            cell_edges = edge_map.get(i, [])
-            # Find neighbors (uniquement ceux qui sont aussi valides)
-            neighbors = set()
-            for j, k in vor.ridge_points:
-                if i == j and k in point_to_cellid:
-                    neighbors.add(point_to_cellid[k])
-                elif i == k and j in point_to_cellid:
-                    neighbors.add(point_to_cellid[j])
+            poly = Polygon(polygon).intersection(rect)
+            if poly.is_empty or poly.geom_type != 'Polygon':
+                continue
             # Sommets du polygone de la cellule
-            vertices = [tuple(map(int, vor.vertices[v])) for v in region]
+            verts = [tuple(map(int, p)) for p in poly.exterior.coords]
+            # Edges
+            cell_edges = []
+            for i in range(len(verts)-1):
+                edge = Edge(verts[i], verts[i+1])
+                self.edges.append(edge)
+                cell_edges.append(edge)
             # Point d'origine (centre de la cellule)
-            origin = tuple(map(int, points[i]))
-            cell = Cell(id=cell_idx, edges=cell_edges, neighbors=list(neighbors), vertices=vertices, origin=origin)
+            origin = tuple(map(int, pt))
+            cell = Cell(id=cell_idx, edges=cell_edges, neighbors=[], vertices=verts, origin=origin)
             self.cells.append(cell)

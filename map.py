@@ -5,8 +5,26 @@ from scipy.ndimage import median_filter, minimum_filter, distance_transform_edt
 from noise import PerlinNoise
 from city import Cities
 
+from astar_lib import astar_lib
+import itertools
+
+
 class Map:
     SEA_LEVEL = 127
+
+    def generate_regions(self):
+        from voronoi import Voronoi
+        import random
+        points = [city.position for city in self.cities.cities]
+        nb_rand = max(5, (self.width * self.height) // 4000)
+        random.seed(self.seed)
+        for _ in range(nb_rand):
+            px = random.randint(0, self.width-1)
+            py = random.randint(0, self.height-1)
+            points.append((px, py))
+        vor = Voronoi(points, self.width, self.height)
+        self.regions = vor.cells
+        self.region_edges = vor.edges
 
     def __init__(self, width: int, height: int, seed: int = 0) -> None:
         self.cities = Cities()
@@ -16,6 +34,89 @@ class Map:
         self.width = width
         self.height = height
         self.map, self.seed, self.rivers, self.cities = self.generate(self.seed)
+        self.routes = []
+        self.regions = []
+        self.region_edges = []
+        self.generate_routes_between_cities()
+        self.generate_regions()
+    def generate_routes_between_cities(self):
+        # Génère les routes logiques entre les villes (MST + A*)
+        if not hasattr(self.cities, 'cities') or len(self.cities.cities) < 2:
+            return
+        cities = self.cities.cities
+        positions = [tuple(city.position) for city in cities]
+        # Graphe complet : (i, j, distance)
+        edges = []
+        for i, j in itertools.combinations(range(len(positions)), 2):
+            a, b = positions[i], positions[j]
+            dist = np.linalg.norm(np.array(a) - np.array(b))
+            edges.append((dist, i, j))
+        # Kruskal pour MST
+        parent = list(range(len(positions)))
+        def find(u):
+            while parent[u] != u:
+                parent[u] = parent[parent[u]]
+                u = parent[u]
+            return u
+        mst = []
+        for dist, i, j in sorted(edges):
+            pi, pj = find(i), find(j)
+            if pi != pj:
+                parent[pi] = pj
+                mst.append((i, j))
+        # Fonction de coût prenant en compte le relief et la mer
+        # Préparer un set de toutes les cases de rivière
+        river_points = set()
+        for river in self.rivers:
+            river_points.update(river)
+
+        # Détecter les lacs (groupes de cases de rivière connectées de taille >= 8)
+        from collections import deque
+        visited = set()
+        lakes = set()
+        for pt in river_points:
+            if pt in visited:
+                continue
+            # BFS pour trouver le groupe
+            group = set()
+            queue = deque([pt])
+            while queue:
+                cur = queue.popleft()
+                if cur in visited or cur not in river_points:
+                    continue
+                visited.add(cur)
+                group.add(cur)
+                x, y = cur
+                for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    nx, ny = x+dx, y+dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height:
+                        npt = (nx, ny)
+                        if npt not in visited and npt in river_points:
+                            queue.append(npt)
+            if len(group) >= 8:
+                lakes.update(group)
+
+        def cost_fn(pos):
+            x, y = pos
+            val = self.map[y, x]
+            if val <= Map.SEA_LEVEL:
+                return float('inf')  # Mer : passage impossible
+            if (x, y) in lakes:
+                return float('inf')  # Lac : passage impossible
+            # Traversée de rivière simple : coût modéré
+            river_penalty = 8 if (x, y) in river_points else 0
+            # Accentuer le relief (puissance plus forte) et ajouter un bruit aléatoire
+            relief_cost = 6 * (max(0, (val - 127) / 32) ** 3)
+            noise = random.uniform(0, 1)
+            return relief_cost + river_penalty + noise
+        # Pour chaque arête du MST, calculer le chemin A* (lib externe)
+        self.routes = []
+        for i, j in mst:
+            start = positions[i]
+            goal = positions[j]
+            path = astar_lib(self.map, start, goal, cost_fn=cost_fn)
+            if path:
+                self.routes.append(path)
 
     def generate(self, seed: int = 0, erosionPasses: int = 200):
         random.seed(seed)
@@ -43,7 +144,7 @@ class Map:
                 if self.map[start[1], start[0]] >= 200:
                     break
             river = self.genRiver(start, 5)
-            if river:
+            if river is not None:
                 self.rivers.append(river)
         
         print(f"Rivières générée en {time.time() - starttime:.2f}s")
@@ -91,8 +192,8 @@ class Map:
         factor = 1 - (dist / maxDist)
         
         # Appliquer le masque
-        self.map = (self.map * factor).astype(np.uint8)
-        self.map = np.clip(self.map, 0, 255)
+        self.map = (self.map * factor)
+        self.map = np.clip(self.map, 0, 255).astype(np.uint8)
         # Lissage pour supprimer les pics isolés
         self.map = median_filter(self.map, size=3)
         return self.map
@@ -259,7 +360,7 @@ class Map:
                     continue
             
             placed_cities.append(selected_position)
-            self.cities.generateCity(selected_position, seed=random.randint(0, 2**31))
+            self.cities.generateCity(selected_position, score=score_map[selected_position[1], selected_position[0]], seed=random.randint(0, 2**31))
             
             # Filtrer candidats
             candidates = [
