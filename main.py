@@ -319,25 +319,7 @@ while running:
                 )
                 window.set_at((info_panel_width + x, tab_bar_height + y), blended)
         
-        # Dessiner les frontières des religions en blanc
-        for edge in game_map.region_edges:
-            p1, p2 = edge.p1, edge.p2
-            regions_sharing_edge = []
-            for region_id, region in enumerate(game_map.regions):
-                if hasattr(region, 'vertices') and region.vertices:
-                    if p1 in region.vertices and p2 in region.vertices:
-                        regions_sharing_edge.append(region_id)
-            
-            if len(regions_sharing_edge) == 2:
-                r1_religion = int(game_map.religions[int(p1[1]), int(p1[0])]) if (0 <= int(p1[1]) < map_height and 0 <= int(p1[0]) < map_width) else -1
-                r2_religion = int(game_map.religions[int(p2[1]), int(p2[0])]) if (0 <= int(p2[1]) < map_height and 0 <= int(p2[0]) < map_width) else -1
-                
-                if r1_religion != r2_religion and r1_religion >= 0 and r2_religion >= 0:
-                    try:
-                        pygame.draw.line(window, (200, 200, 100), (info_panel_width + p1[0], tab_bar_height + p1[1]), 
-                                       (info_panel_width + p2[0], tab_bar_height + p2[1]), 1)
-                    except:
-                        pass
+        # Arêtes des religions désactivées
     
     # Overlay des cultures - avec opacité 40%
     elif display_mode == 'cultures' and hasattr(game_map, 'cultures'):
@@ -365,25 +347,7 @@ while running:
                 )
                 window.set_at((info_panel_width + x, tab_bar_height + y), blended)
         
-        # Dessiner les frontières des cultures en jaune pâle
-        for edge in game_map.region_edges:
-            p1, p2 = edge.p1, edge.p2
-            regions_sharing_edge = []
-            for region_id, region in enumerate(game_map.regions):
-                if hasattr(region, 'vertices') and region.vertices:
-                    if p1 in region.vertices and p2 in region.vertices:
-                        regions_sharing_edge.append(region_id)
-            
-            if len(regions_sharing_edge) == 2:
-                r1_culture = int(game_map.cultures[int(p1[1]), int(p1[0])]) if (0 <= int(p1[1]) < map_height and 0 <= int(p1[0]) < map_width) else -1
-                r2_culture = int(game_map.cultures[int(p2[1]), int(p2[0])]) if (0 <= int(p2[1]) < map_height and 0 <= int(p2[0]) < map_width) else -1
-                
-                if r1_culture != r2_culture and r1_culture >= 0 and r2_culture >= 0:
-                    try:
-                        pygame.draw.line(window, (200, 180, 50), (info_panel_width + p1[0], tab_bar_height + p1[1]), 
-                                       (info_panel_width + p2[0], tab_bar_height + p2[1]), 1)
-                    except:
-                        pass
+        # Arêtes des cultures désactivées
     
     # Overlay des pays - avec opacité 40%
     elif display_mode == 'countries' and hasattr(game_map, 'region_to_country') and game_map.regions:
@@ -496,7 +460,7 @@ while running:
     # Afficher les infos du pays survolé - SEULEMENT sur le tab Countries
     if hovered_country and tab_system.active_tab == 1:  # Tab Countries
         info_texts = []
-        info_texts.append(f"🏛 {hovered_country.name}")
+        info_texts.append(f"[COUNTRY] {hovered_country.name}")
         info_texts.append(f"Population: {hovered_country.population:,}")
         info_texts.append(f"Government: {hovered_country.government}")
         info_texts.append(f"Founded: {hovered_country.year_founded}")
@@ -513,7 +477,11 @@ while running:
             for res_type, value in hovered_country.resources.items():
                 info_texts.append(f"  {res_type}: {value:.0f}")
         
+        # Limiter à 80px de hauteur pour ne pas recouvrir légende
+        max_y = tab_bar_height + map_height - 100
         for text in info_texts:
+            if y_pos > max_y:
+                break
             if text:  # Ne pas afficher les lignes vides
                 text_surface = tiny_font.render(text, True, (0, 0, 0))
                 window.blit(text_surface, (5, y_pos))
@@ -521,7 +489,7 @@ while running:
     # Afficher les infos de la ville survolée - SEULEMENT sur le tab Cities
     elif hovered_city and tab_system.active_tab == 2:  # Tab Cities
         info_texts = []
-        info_texts.append(f"🏙 {hovered_city.name}")
+        info_texts.append(f"[CITY] {hovered_city.name}")
         info_texts.append(f"Pos: {hovered_city.position}")
         info_texts.append(f"Population: {hovered_city.population:,}")
         info_texts.append(f"Type: {hovered_city.city_type}")
@@ -536,11 +504,65 @@ while running:
             for res_type, value in hovered_city.resources.items():
                 info_texts.append(f"  {res_type}: {value:.0f}")
         
+        # Limiter à 80px de hauteur pour ne pas recouvrir légende
+        max_y = tab_bar_height + map_height - 100
         for text in info_texts:
+            if y_pos > max_y:
+                break
             if text:  # Ne pas afficher les lignes vides
                 text_surface = tiny_font.render(text, True, (0, 0, 0))
                 window.blit(text_surface, (5, y_pos))
             y_pos += line_height
+    # Afficher les infos de religion survolée - SEULEMENT sur le tab Religions
+    elif tab_system.active_tab == 6:  # Tab Religions
+        if 0 <= mx < map_width and 0 <= my < map_height:
+            religion_id = int(game_map.religions[my, mx])
+            if religion_id >= 0 and hasattr(game_map, 'religion_system') and religion_id in game_map.religion_system.religions:
+                religion = game_map.religion_system.religions[religion_id]
+                info_texts = []
+                info_texts.append(f"[RELIGION] {religion.name}")
+                info_texts.append(f"Founded: {religion.founding_year}")
+                info_texts.append(f"Location: {religion.founding_city}")
+                if religion.events:
+                    info_texts.append(f"Events: {len(religion.events)}")
+                    for event in religion.events[:3]:  # Afficher les 3 premiers événements
+                        info_texts.append(f"  - {event.year}: {event.description[:30]}...")
+                
+                # Limiter à 80px de hauteur pour ne pas recouvrir légende
+                max_y = tab_bar_height + map_height - 100
+                for text in info_texts:
+                    if y_pos > max_y:
+                        break
+                    if text:
+                        text_surface = tiny_font.render(text, True, (0, 0, 0))
+                        window.blit(text_surface, (5, y_pos))
+                    y_pos += line_height
+    # Afficher les infos de culture survolée - SEULEMENT sur le tab Cultures
+    elif tab_system.active_tab == 7:  # Tab Cultures
+        if 0 <= mx < map_width and 0 <= my < map_height:
+            culture_id = int(game_map.cultures[my, mx])
+            if culture_id >= 0 and hasattr(game_map, 'religion_system') and culture_id in game_map.religion_system.cultures:
+                culture = game_map.religion_system.cultures[culture_id]
+                info_texts = []
+                info_texts.append(f"[CULTURE] {culture.name}")
+                info_texts.append(f"Origin Region: {culture.origin_region_id}")
+                info_texts.append(f"Climate Type: {culture.climate_type}")
+                info_texts.append(f"Color: RGB{culture.color}")
+                if culture.traits:
+                    info_texts.append("")
+                    info_texts.append("Traits:")
+                    for trait_name, trait_value in culture.traits.items():
+                        info_texts.append(f"  {trait_name}: {trait_value[:40]}...")
+                
+                # Limiter à 80px de hauteur pour ne pas recouvrir légende
+                max_y = tab_bar_height + map_height - 100
+                for text in info_texts:
+                    if y_pos > max_y:
+                        break
+                    if text:
+                        text_surface = tiny_font.render(text, True, (0, 0, 0))
+                        window.blit(text_surface, (5, y_pos))
+                    y_pos += line_height
     elif 0 <= mx < map_width and 0 <= my < map_height:
         info_texts = []
         info_texts.append(f"Pos: ({mx}, {my})")
