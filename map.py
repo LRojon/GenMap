@@ -428,7 +428,6 @@ class Map:
         
         return final_routes
 
-
     def _check_edge_validity(self, start, goal):
         """Vérifier si une arête passe par la mer ou trop haut en montagne."""
         x0, y0 = start
@@ -565,42 +564,43 @@ class Map:
         nbCities = (self.width * self.height) // 10000
         nbCities = int(nbCities * random.uniform(0.8, 1.2))
         self.placeCities(nbCities)
-        time_cities = time.time() - starttime
-        print(f"⏱ {nbCities} villes placées en {time_cities:.2f}s")
+        print(f"⏱ {nbCities} villes placées en {time.time() - starttime:.2f}s")
         starttime = time.time()
 
+        # ========== Génération des routes ==========
         self.generate_routes_between_cities()
-        time_routes = time.time() - starttime
-        print(f"⏱ {len(self.routes)} routes générées en {time_routes:.2f}s")
+        print(f"⏱ {len(self.routes)} routes générées en {time.time() - starttime:.2f}s")
         starttime = time.time()
         
-        # Calculer ressource trade basée sur les routes
+        # ========== Calculer ressource trade basée sur les routes ==========
+        starttime = time.time()
         for city in self.cities.cities:
             city.calculate_trade_from_routes(self.routes, self.cities.cities)
+        print(f"⏱ Ressource trade calculée en {time.time() - starttime:.2f}s")
 
+        # ========== Génération des régions et pays ==========
+        starttime = time.time()
         self.generate_regions()
         print(f"⏱ Régions générées en {time.time() - starttime:.2f}s")
+        
         starttime = time.time()
-
         self.generate_countries()
         print(f"⏱ Pays générés en {time.time() - starttime:.2f}s")
-        starttime = time.time()
+
 
         # ========== Génération du climat et des biomes ==========
+        starttime = time.time()
         self.genClimate()
-        time_climate = time.time() - starttime
-        print(f"⏱ Climat généré en {time_climate:.2f}s")
+        print(f"⏱ Climat généré en {time.time() - starttime:.2f}s")
         starttime = time.time()
         
         self.genBiomes()
-        time_biomes = time.time() - starttime
-        print(f"⏱ Biomes générés en {time_biomes:.2f}s")
+        print(f"⏱ Biomes générés en {time.time() - starttime:.2f}s")
         starttime = time.time()
         
-        # Générer religions et cultures sur Voronoi
-        self.generate_religions_and_cultures()
-        time_rel_cult = time.time() - starttime
-        print(f"⏱ Religions et cultures générées en {time_rel_cult:.2f}s")
+        # ========== Générer religions et cultures avec propagation organique ==========
+        self.generate_religions_and_cultures_new()
+        print(f"⏱ Religions et cultures générées en {time.time() - starttime:.2f}s")
 
         return self.map, self.seed, self.rivers, self.cities
 
@@ -720,37 +720,242 @@ class Map:
         return self.biomes
 
     def generate_religions_and_cultures(self):
-        """Génère les cartes de religions et cultures basées sur Voronoi."""
+        """Génère les cartes de religions et cultures basées sur pays + diffusion."""
         from city import ProcNameGenerator
         
-        if not hasattr(self, 'regions') or not self.regions:
+        if not hasattr(self, 'regions') or not self.regions or not hasattr(self, 'region_to_country'):
             return
         
-        # Générer noms procéduraux pour chaque région
-        for region_id in range(len(self.regions)):
-            # Générer un nom unique pour chaque région
-            self.religion_names[region_id] = ProcNameGenerator.generate_religion_name(self.seed ^ region_id)
-            self.culture_names[region_id] = ProcNameGenerator.generate_culture_name(self.seed ^ (region_id * 999))
+        # Créer des mappages: country_id -> religion/culture name
+        country_religions = {}
+        country_cultures = {}
         
-        # Remplir les cartes de religions et cultures (par pixel, basé sur Voronoi)
+        # Assigner une religion et culture unique à chaque pays
+        for country_id in self.countries.countries.keys():
+            country_obj = self.countries.countries[country_id]
+            country_religions[country_id] = country_obj.religion
+            country_cultures[country_id] = country_obj.culture
+        
+        # Remplir les cartes de religions et cultures (par région, propagation depuis pays)
         try:
-            from scipy.spatial import distance
-            # Calculer les centres des régions Voronoi
-            region_centers = np.array([self.regions[i].origin if hasattr(self.regions[i], 'origin') 
-                                      else self.regions[i].vertices.mean(axis=0) 
-                                      for i in range(len(self.regions))])
+            from skimage.draw import polygon as ski_polygon
             
-            # Pour chaque pixel, assigner la région Voronoi la plus proche
-            for y in range(self.height):
-                for x in range(self.width):
-                    # Trouver la région la plus proche
-                    distances = distance.cdist([(x, y)], region_centers)[0]
-                    nearest_region = np.argmin(distances)
+            # Tracking des noms utilisés pour éviter les doublons
+            used_religions = set()
+            used_cultures = set()
+            
+            # D'abord, remplir par région Voronoi basé sur le pays
+            for region_id, region in enumerate(self.regions):
+                if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
+                    # Trouver quel pays contrôle cette région
+                    country_id = self.region_to_country.get(region_id, -1)
                     
-                    self.religions[y, x] = nearest_region
-                    self.cultures[y, x] = nearest_region
+                    # Déterminer religion/culture
+                    if country_id >= 0 and country_id in country_religions:
+                        religion_name = country_religions[country_id]
+                        culture_name = country_cultures[country_id]
+                        
+                        # IMPORTANT: Vérifier aussi les doublons pour les pays
+                        # Si plusieurs régions du même pays, on veut des noms différents par région
+                        counter = 0
+                        while religion_name in used_religions and counter < 50:
+                            counter += 1
+                            religion_name = ProcNameGenerator.generate_religion_name(int(self.seed ^ region_id ^ (counter * 12345)))
+                        
+                        counter = 0
+                        while culture_name in used_cultures and counter < 100:
+                            counter += 1
+                            culture_name = ProcNameGenerator.generate_culture_name(int(self.seed ^ (region_id * 999) ^ (counter * 54321)))
+                    else:
+                        # Fallback: générer unique pour la région
+                        # Générer religion avec garantie d'unicité
+                        religion_name = ProcNameGenerator.generate_religion_name(int(self.seed ^ region_id))
+                        counter = 0
+                        while religion_name in used_religions and counter < 50:
+                            # Si doublon, régénérer avec seed modifié (multiplicateur plus agressif)
+                            counter += 1
+                            religion_name = ProcNameGenerator.generate_religion_name(int(self.seed ^ region_id ^ (counter * 12345)))
+                        
+                        # Générer culture avec garantie d'unicité (plus de tentatives car 50% aléatoire)
+                        culture_name = ProcNameGenerator.generate_culture_name(int(self.seed ^ (region_id * 999)))
+                        counter = 0
+                        while culture_name in used_cultures and counter < 100:
+                            # Si doublon, régénérer avec seed modifié (multiplicateur très agressif pour 50% aléa)
+                            counter += 1
+                            culture_name = ProcNameGenerator.generate_culture_name(int(self.seed ^ (region_id * 999) ^ (counter * 54321)))
+                    
+                    # Stocker les noms et les marquer comme utilisés
+                    self.religion_names[region_id] = religion_name
+                    self.culture_names[region_id] = culture_name
+                    used_religions.add(religion_name)
+                    used_cultures.add(culture_name)
+                    
+                    # Remplir les pixels de la région
+                    vertices = region.vertices
+                    rr, cc = ski_polygon([v[1] for v in vertices], 
+                                        [v[0] for v in vertices], 
+                                        shape=(self.height, self.width))
+                    
+                    for r, c in zip(rr, cc):
+                        if 0 <= r < self.height and 0 <= c < self.width:
+                            self.religions[r, c] = region_id
+                            self.cultures[r, c] = region_id
+            
+            # Diffusion légère: influence des régions voisines pour "mélange" aux frontières
+            self._diffuse_religions_and_cultures()
+            
         except Exception as e:
             print(f"⚠ Erreur génération religions/cultures: {e}")
+    
+    def _diffuse_religions_and_cultures(self, iterations: int = 2):
+        """Applique une légère diffusion pour créer des transitions organiques."""
+        import scipy.ndimage as ndimage
+        
+        try:
+            # Appliquer un léger flou pour créer des transitions douces aux frontières
+            for _ in range(iterations):
+                # Léger filtrage médian pour lisser les transitions
+                self.religions = ndimage.median_filter(self.religions, size=3)
+                self.cultures = ndimage.median_filter(self.cultures, size=3)
+        except:
+            pass  # Si scipy échoue, on continue sans diffusion
+
+    def generate_religions_and_cultures_new(self):
+        """Système complet de propagation religieuse avec historique et traits culturels."""
+        from religion_system import ReligionSystem
+        
+        try:
+            # Créer système religieux
+            religion_sys = ReligionSystem(self.seed, self)
+            
+            # Générer religions fondamentales dans villes majeures
+            religion_sys.generate_foundational_religions()
+            
+            # Propager religions depuis leurs villes d'origine
+            religion_sys.propagate_religions()
+            
+            # Générer cultures par région
+            religion_sys.generate_culture_from_regions()
+            
+            # Propager cultures depuis leurs villes d'origine
+            religion_sys.propagate_cultures()
+            
+            # Appliquer diffusion culturelle
+            religion_sys.apply_cultural_diffusion()
+            
+            # Stocker les religions et cultures pour utilisation dans UI
+            self.religion_system = religion_sys
+            
+            # Créer les cartes spatiales pour visualisation
+            self._create_religion_culture_maps_from_system(religion_sys)
+            
+            # Stocker les dictionnaires de religions/cultures fondamentales pour affichage UI (propre)
+            self.religion_names_foundational = {}
+            self.culture_names_major = {}
+            
+            # Mapper religions fondamentales
+            for religion_id, religion in religion_sys.foundational_religions.items():
+                # Trouver la première région avec cette religion
+                for region_id, region_religion in enumerate(self.region_to_country.items() if hasattr(self, 'region_to_country') else []):
+                    self.religion_names_foundational[religion_id] = religion.name
+                    break
+            
+            # Mapper cultures majeures
+            for culture_id, culture in religion_sys.major_cultures.items():
+                self.culture_names_major[culture_id] = culture.name
+            
+        except Exception as e:
+            print(f"⚠ Erreur dans système religieux complet: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback vers l'ancienne méthode
+            self.generate_religions_and_cultures()
+    
+    def _create_religion_culture_maps_from_system(self, religion_sys):
+        """Crée les cartes spatiales de religions/cultures depuis le ReligionSystem."""
+        from skimage.draw import polygon as ski_polygon
+        
+        # Initialiser les cartes si nécessaire
+        if not hasattr(self, 'religions') or self.religions is None:
+            self.religions = np.zeros((self.height, self.width), dtype=np.uint32)
+        if not hasattr(self, 'cultures') or self.cultures is None:
+            self.cultures = np.zeros((self.height, self.width), dtype=np.uint32)
+        if not hasattr(self, 'religion_names'):
+            self.religion_names = {}
+        if not hasattr(self, 'culture_names'):
+            self.culture_names = {}
+        
+        # Remplir les cartes spatiales depuis les régions
+        try:
+            # Mapper religions aux régions Voronoi
+            region_religions = {}  # region_id -> religion_id
+            region_cultures = {}   # region_id -> culture_id
+            
+            # Assigner religions aux régions basé sur city.religion (propagation)
+            for region_id, region in enumerate(self.regions):
+                if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
+                    # Trouver le centroid de la région
+                    vertices = region.vertices
+                    centroid_x = sum(v[0] for v in vertices) / len(vertices)
+                    centroid_y = sum(v[1] for v in vertices) / len(vertices)
+                    centroid = (centroid_x, centroid_y)
+                    
+                    # Trouver la ville la plus proche du centroid
+                    closest_city = None
+                    min_dist = float('inf')
+                    
+                    for city in self.cities.cities:
+                        dist = ((city.position[0] - centroid[0])**2 + (city.position[1] - centroid[1])**2)**0.5
+                        if dist < min_dist:
+                            min_dist = dist
+                            closest_city = city
+                    
+                    # Assigner la religion de la ville la plus proche
+                    if closest_city and hasattr(closest_city, 'religion') and closest_city.religion:
+                        religion_name = closest_city.religion
+                        religion_id = hash(religion_name) % (2**31)
+                        region_religions[region_id] = religion_id
+                        
+                        if region_id not in self.religion_names:
+                            self.religion_names[region_id] = religion_name
+            
+            # Cultures: utiliser la propagation par régions voisines du ReligionSystem
+            if hasattr(religion_sys, 'region_to_culture'):
+                for region_id, culture_id_source in religion_sys.region_to_culture.items():
+                    culture = religion_sys.cultures.get(culture_id_source)
+                    if culture:
+                        # Utiliser directement l'ID de culture de ReligionSystem
+                        region_cultures[region_id] = culture_id_source
+                        
+                        if region_id not in self.culture_names:
+                            self.culture_names[region_id] = culture.name
+            
+            # Remplir les pixels des régions Voronoi
+            for region_id, region in enumerate(self.regions):
+                if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
+                    vertices = region.vertices
+                    try:
+                        rr, cc = ski_polygon([v[1] for v in vertices], 
+                                            [v[0] for v in vertices], 
+                                            shape=(self.height, self.width))
+                        
+                        religion_id = region_religions.get(region_id, -1)  # -1 si pas trouvé
+                        culture_id = region_cultures.get(region_id, -1)    # -1 si pas trouvé
+                        
+                        for r, c in zip(rr, cc):
+                            if 0 <= r < self.height and 0 <= c < self.width:
+                                if religion_id >= 0:
+                                    self.religions[r, c] = religion_id
+                                if culture_id >= 0:
+                                    self.cultures[r, c] = culture_id
+                    except:
+                        pass
+            
+            # Appliquer diffusion légère
+            self._diffuse_religions_and_cultures(iterations=2)
+            
+        except Exception as e:
+            print(f"⚠ Erreur création maps religions/cultures: {e}")
 
     def genRiver(self, start: tuple[int, int], seed: int = 0, width: int = 1):
         """Génération de rivière (optimisée)."""

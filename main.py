@@ -52,7 +52,7 @@ seed = sys.argv[1] if len(sys.argv) > 1 else None
 
 pygame.init()
 map_width, map_height = 400, 400
-info_panel_width = 150  # Largeur du panneau d'infos sur la gauche
+info_panel_width = 280  # Largeur du panneau d'infos sur la gauche (augmentée encore de 220)
 tab_bar_height = 40    # Hauteur de la barre de tabs en haut
 info_bar_height = 50   # Hauteur de la barre d'info en bas
 
@@ -109,8 +109,8 @@ class TabSystem:
         ]
         self.active_tab = 0
         
-        # Calculer la largeur des tabs (fixe avec icônes + numéro)
-        self.tab_width = 40  # Largeur fixe pour chaque tab (réduite car 8 tabs maintenant)
+        # Calculer la largeur des tabs (fixe avec noms raccourcis)
+        self.tab_width = 50  # Largeur pour chaque tab (nom raccourci: "Clim.", "Religi.", etc)
         self.tab_rects = []
         
         for i in range(len(self.tabs)):
@@ -189,10 +189,14 @@ class TabSystem:
             pygame.draw.line(window, (100, 100, 100), (rect.right, rect.top), 
                            (rect.right, rect.bottom), 1)
             
-            # Afficher l'icône + numéro de touche
-            key_num = key_names.get(tab['key'], '?')
-            tab_text = f"{tab['icon']}{key_num}"
-            text_surface = font_small.render(tab_text, True, text_color)
+            # Afficher le nom raccourci (5 premières lettres + point si trop long)
+            tab_name = tab['name']
+            if len(tab_name) > 5:
+                display_text = tab_name[:5] + "."
+            else:
+                display_text = tab_name
+            
+            text_surface = font_small.render(display_text, True, text_color)
             text_rect = text_surface.get_rect(center=rect.center)
             window.blit(text_surface, text_rect)
 
@@ -298,10 +302,14 @@ while running:
     if display_mode == 'religions' and hasattr(game_map, 'religions'):
         for y in range(map_height):
             for x in range(map_width):
-                region_id = game_map.religions[y, x]
-                # Générer une couleur unique basée sur le region_id
-                rng = random.Random(region_id)
-                color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
+                region_id = int(game_map.religions[y, x])  # Convertir uint32 vers int
+                # Utiliser la couleur depuis le ReligionSystem si disponible
+                if hasattr(game_map, 'religion_system') and region_id in game_map.religion_system.religions:
+                    color = game_map.religion_system.religions[region_id].color
+                else:
+                    # Fallback: générer une couleur depuis region_id
+                    rng = random.Random(region_id)
+                    color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
                 
                 current = window.get_at((info_panel_width + x, tab_bar_height + y))
                 blended = (
@@ -310,15 +318,44 @@ while running:
                     int(current[2] * 0.65 + color[2] * 0.35)
                 )
                 window.set_at((info_panel_width + x, tab_bar_height + y), blended)
+        
+        # Dessiner les frontières des religions en blanc
+        for edge in game_map.region_edges:
+            p1, p2 = edge.p1, edge.p2
+            regions_sharing_edge = []
+            for region_id, region in enumerate(game_map.regions):
+                if hasattr(region, 'vertices') and region.vertices:
+                    if p1 in region.vertices and p2 in region.vertices:
+                        regions_sharing_edge.append(region_id)
+            
+            if len(regions_sharing_edge) == 2:
+                r1_religion = int(game_map.religions[int(p1[1]), int(p1[0])]) if (0 <= int(p1[1]) < map_height and 0 <= int(p1[0]) < map_width) else -1
+                r2_religion = int(game_map.religions[int(p2[1]), int(p2[0])]) if (0 <= int(p2[1]) < map_height and 0 <= int(p2[0]) < map_width) else -1
+                
+                if r1_religion != r2_religion and r1_religion >= 0 and r2_religion >= 0:
+                    try:
+                        pygame.draw.line(window, (200, 200, 100), (info_panel_width + p1[0], tab_bar_height + p1[1]), 
+                                       (info_panel_width + p2[0], tab_bar_height + p2[1]), 1)
+                    except:
+                        pass
     
     # Overlay des cultures - avec opacité 40%
     elif display_mode == 'cultures' and hasattr(game_map, 'cultures'):
         for y in range(map_height):
             for x in range(map_width):
-                region_id = game_map.cultures[y, x]
-                # Générer une couleur unique basée sur le region_id avec un offset different
-                rng = random.Random(region_id ^ 777)
-                color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
+                culture_id = int(game_map.cultures[y, x])  # Convertir uint32 vers int
+                
+                # Ignorer les pixels sans culture (-1)
+                if culture_id < 0:
+                    continue
+                
+                # Utiliser la couleur depuis le ReligionSystem si disponible
+                if hasattr(game_map, 'religion_system') and culture_id in game_map.religion_system.cultures:
+                    color = game_map.religion_system.cultures[culture_id].color
+                else:
+                    # Fallback: générer une couleur depuis culture_id
+                    rng = random.Random(culture_id ^ 777)
+                    color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
                 
                 current = window.get_at((info_panel_width + x, tab_bar_height + y))
                 blended = (
@@ -327,6 +364,26 @@ while running:
                     int(current[2] * 0.65 + color[2] * 0.35)
                 )
                 window.set_at((info_panel_width + x, tab_bar_height + y), blended)
+        
+        # Dessiner les frontières des cultures en jaune pâle
+        for edge in game_map.region_edges:
+            p1, p2 = edge.p1, edge.p2
+            regions_sharing_edge = []
+            for region_id, region in enumerate(game_map.regions):
+                if hasattr(region, 'vertices') and region.vertices:
+                    if p1 in region.vertices and p2 in region.vertices:
+                        regions_sharing_edge.append(region_id)
+            
+            if len(regions_sharing_edge) == 2:
+                r1_culture = int(game_map.cultures[int(p1[1]), int(p1[0])]) if (0 <= int(p1[1]) < map_height and 0 <= int(p1[0]) < map_width) else -1
+                r2_culture = int(game_map.cultures[int(p2[1]), int(p2[0])]) if (0 <= int(p2[1]) < map_height and 0 <= int(p2[0]) < map_width) else -1
+                
+                if r1_culture != r2_culture and r1_culture >= 0 and r2_culture >= 0:
+                    try:
+                        pygame.draw.line(window, (200, 180, 50), (info_panel_width + p1[0], tab_bar_height + p1[1]), 
+                                       (info_panel_width + p2[0], tab_bar_height + p2[1]), 1)
+                    except:
+                        pass
     
     # Overlay des pays - avec opacité 40%
     elif display_mode == 'countries' and hasattr(game_map, 'region_to_country') and game_map.regions:
@@ -411,7 +468,7 @@ while running:
                     (info_panel_width, tab_bar_height + map_height), 2)
     
     small_font = pygame.font.SysFont(None, 14)
-    tiny_font = pygame.font.SysFont(None, 12)
+    tiny_font = pygame.font.SysFont(None, 14)  # Augmenté de 12 à 14
     
     # Title du tab actif
     tab_name = tab_system.get_active_tab_name()
@@ -421,7 +478,7 @@ while running:
     
     # Infos contextuelles
     y_pos = tab_bar_height + 35
-    line_height = 16
+    line_height = 18  # Augmenté de 16 à 18 pour accommoder la plus grande police
     
     # Chercher si la souris est sur une ville
     hovered_city = None
@@ -565,19 +622,21 @@ while running:
             y_pos += line_height
     
     # Légende Religions
-    elif display_mode == 'religions' and hasattr(game_map, 'religion_names'):
+    elif display_mode == 'religions':
         y_pos = tab_bar_height + 120
-        legend_title = small_font.render("Religions:", True, (0, 0, 0))
+        legend_title = small_font.render("Religions Fondamentales:", True, (0, 0, 0))
         window.blit(legend_title, (5, y_pos))
         y_pos += line_height + 5
         
-        # Afficher les noms des religions (limité à 10 pour la place)
-        for region_id, religion_name in sorted(game_map.religion_names.items())[:10]:
+        # Afficher les religions fondamentales (pas toutes les régions!)
+        religion_names_to_show = game_map.religion_names_foundational if hasattr(game_map, 'religion_names_foundational') else {}
+        
+        for religion_id, religion_name in sorted(religion_names_to_show.items()):
             if y_pos + 12 > tab_bar_height + map_height - 20:
                 break
             
-            # Couleur basée sur region_id
-            rng = random.Random(region_id)
+            # Couleur basée sur religion_id
+            rng = random.Random(religion_id)
             color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
             
             # Petit carré de couleur
@@ -585,20 +644,22 @@ while running:
             pygame.draw.rect(window, (0, 0, 0), (5, y_pos, 12, 12), 1)
             
             # Nom de la religion (raccourci si trop long)
-            display_name = religion_name[:12] + ".." if len(religion_name) > 14 else religion_name
+            display_name = religion_name
             name_text = tiny_font.render(display_name, True, (0, 0, 0))
             window.blit(name_text, (20, y_pos - 2))
             y_pos += line_height
     
     # Légende Cultures
-    elif display_mode == 'cultures' and hasattr(game_map, 'culture_names'):
+    elif display_mode == 'cultures':
         y_pos = tab_bar_height + 120
-        legend_title = small_font.render("Cultures:", True, (0, 0, 0))
+        legend_title = small_font.render("Cultures Majeures:", True, (0, 0, 0))
         window.blit(legend_title, (5, y_pos))
         y_pos += line_height + 5
         
-        # Afficher les noms des cultures (limité à 10 pour la place)
-        for region_id, culture_name in sorted(game_map.culture_names.items())[:10]:
+        # Afficher seulement les cultures majeures (pas toutes les régions!)
+        culture_names_to_show = game_map.culture_names_major if hasattr(game_map, 'culture_names_major') else {}
+        
+        for region_id, culture_name in sorted(culture_names_to_show.items()):
             if y_pos + 12 > tab_bar_height + map_height - 20:
                 break
             
@@ -610,8 +671,8 @@ while running:
             pygame.draw.rect(window, color, (5, y_pos, 12, 12))
             pygame.draw.rect(window, (0, 0, 0), (5, y_pos, 12, 12), 1)
             
-            # Nom de la culture (raccourci si trop long)
-            display_name = culture_name[:12] + ".." if len(culture_name) > 14 else culture_name
+            # Nom de la culture
+            display_name = culture_name
             name_text = tiny_font.render(display_name, True, (0, 0, 0))
             window.blit(name_text, (20, y_pos - 2))
             y_pos += line_height

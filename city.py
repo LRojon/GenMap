@@ -61,47 +61,101 @@ class ProcNameGenerator:
     
     @staticmethod
     def generate_religion_name(seed: int) -> str:
-        """Génère un nom de religion procédural."""
+        """Génère un nom de religion procédural avec structures thématiques."""
         rng = random.Random(seed)
         
-        # Noms de religion: 2-3 syllabes + suffixe religieux
-        num_syllables = rng.randint(2, 3)
-        name = ""
+        # Structures thématiques pour religions
+        templates = [
+            "Le Culte de {}", 
+            "Les Enfants de {}",
+            "L'Ordre de {}",
+            "La Foi de {}",
+            "Le Chemin de {}",
+            "Les Gardiens de {}",
+            "La Bénédiction de {}",
+            "Le Temple de {}",
+            "L'Alliance de {}",
+            "La Voie de {}",
+            "Les Disciples de {}",
+            "La Communion de {}",
+        ]
         
-        for i in range(num_syllables):
-            if rng.random() < 0.3:
-                name += rng.choice(ProcNameGenerator.SYLLABLES['clusters'])
-            else:
-                name += rng.choice(ProcNameGenerator.SYLLABLES['consonants'])
-            name += rng.choice(ProcNameGenerator.SYLLABLES['vowels'])
+        # Thèmes religieux
+        deities = [
+            "l'Aube", "la Lune", "l'Étoile du Nord",
+            "la Terre Mère", "l'Esprit Ancien", "le Grand Arbre",
+            "la Flamme Éternelle", "l'Océan Primordial", "les Anciens",
+            "la Lumière", "l'Ombre", "l'Équilibre",
+            "la Mort et la Renaissance", "la Tempête", "les Montagnes",
+            "la Forêt Sacrée", "le Ciel", "le Cristal",
+            "l'Infini", "la Destinée", "l'Harmonie",
+        ]
         
-        # Suffixes religieux
-        suffixes = ['ism', 'ity', 'ism', 'ism', 'faith', 'way']
-        name += rng.choice(suffixes)
+        template = rng.choice(templates)
+        deity = rng.choice(deities)
         
-        return name.capitalize()
+        return template.format(deity)
     
     @staticmethod
     def generate_culture_name(seed: int) -> str:
-        """Génère un nom de culture procédural."""
+        """Génère un nom de culture procédural avec 50% ancien système."""
         rng = random.Random(seed)
         
-        # Noms de culture: 1-2 syllabes + suffixe culturel
-        num_syllables = rng.randint(1, 2)
-        name = ""
+        # 50% chance d'utiliser l'ancien système
+        if rng.random() < 0.5:
+            # Ancien système: 1-2 syllabes + suffixe culturel
+            num_syllables = rng.randint(1, 2)
+            name = ""
+            
+            for i in range(num_syllables):
+                if rng.random() < 0.4 and i == 0:
+                    name += rng.choice(ProcNameGenerator.SYLLABLES['clusters'])
+                else:
+                    name += rng.choice(ProcNameGenerator.SYLLABLES['consonants'])
+                name += rng.choice(ProcNameGenerator.SYLLABLES['vowels'])
+            
+            # Suffixes culturels
+            suffixes = ['ian', 'folk', 'kin', 'ic', 'ers', 'ian']
+            name += rng.choice(suffixes)
+            
+            return name.capitalize()
         
-        for i in range(num_syllables):
-            if rng.random() < 0.4 and i == 0:
-                name += rng.choice(ProcNameGenerator.SYLLABLES['clusters'])
-            else:
-                name += rng.choice(ProcNameGenerator.SYLLABLES['consonants'])
-            name += rng.choice(ProcNameGenerator.SYLLABLES['vowels'])
+        # 50% chance: Nouveau système thématique
+        # Structures thématiques pour cultures
+        templates = [
+            "La Tradition {}",
+            "L'Héritage {}",
+            "Les {} Folk",
+            "La Dynastie {}",
+            "Le Peuple {}",
+            "L'École {}",
+            "La Lignée {}",
+            "Les Maîtres {}",
+            "La Caste {}",
+            "La Fraternité {}",
+            "L'Ascendance {}",
+            "Les Artisans {}",
+        ]
         
-        # Suffixes culturels
-        suffixes = ['ian', 'folk', 'kin', 'ic', 'ers', 'ian']
-        name += rng.choice(suffixes)
+        # Adjectifs/noms culturels
+        traits = [
+            "de la Forge", "du Vent", "de la Mer",
+            "de la Montagne", "de la Rivière", "de la Forêt",
+            "de la Pierre", "de l'Acier", "de l'Argent",
+            "du Feu", "du Ciel", "de la Terre",
+            "de la Sagesse", "de la Vaillance", "de l'Honneur",
+            "des Moissons", "des Maisons", "des Ancêtres",
+            "du Passé", "de l'Avenir", "de la Paix",
+        ]
         
-        return name.capitalize()
+        template = rng.choice(templates)
+        trait = rng.choice(traits)
+        
+        # Remplacer {} dans le template
+        if "{}" in template:
+            return template.format(trait)
+        else:
+            return template
 
 
 class City:
