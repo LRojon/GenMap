@@ -1233,206 +1233,365 @@ class Map:
         return nearby > 8
 
     def generate_countries(self):
-        """Génère les pays avec Voronoi + Clustering intelligent.
+        """Génère les pays par propagation d'influence depuis les capitales.
         
         Règles:
-        - Basé sur Voronoi avec villes comme graines
-        - Clustering K-means pour regrouper les régions en pays
-        - Nombre de pays proportionnel à la superficie
-        - Capitale = ville avec meilleur score du pays
-        - Frontières ajustées par géographie (rivières, montagnes)
-        - Fusion de petites enclaves
-        - Zones diplomatiques/tampons entre pays
+        1. Chaque capitale engendre un pays avec influence = score de la capitale
+        2. L'influence se propage région par région voisine
+        3. L'influence décline de 5-15% (aléatoire) entre régions
+        4. La propagation s'arrête à influence ≤ 0
+        5. Si rencontre un autre pays: compare les influences
+           - Si propagation > pays actuel: région conquise
+           - Sinon: propagation s'arrête
         """
         if not hasattr(self.cities, 'cities') or len(self.cities.cities) < 2:
             return
         
         start_time = time.time()
         
-        # ÉTAPE 1: Générer Voronoi basé sur les villes
-        self.generate_regions()  # Crée self.regions avec cellules Voronoi
+        # ÉTAPE 1: Initialiser les capitales
+        # Sélectionner les villes les plus importantes comme capitales
+        cities_sorted = sorted(self.cities.cities, key=lambda c: c.score, reverse=True)
         
-        num_cities = len(self.cities.cities)
-        num_regions = len(self.regions)
+        # Nombre de pays = fonction du score total (plus il y a de bonnes villes, plus de pays)
+        total_score = sum(c.score for c in self.cities.cities)
+        num_countries = max(2, min(len(self.cities.cities), int(len(self.cities.cities) * 0.4)))  # 40% des villes sont capitales
         
-        # ÉTAPE 2: Déterminer nombre de pays (proportionnel à superficie)
-        # Pour une map 400x400: ~14-20 pays généralement bon
-        map_area = self.width * self.height
-        target_country_area = max(4000, map_area // 15)  # ~15-20 pays pour 400x400
-        num_countries = max(2, min(num_cities, map_area // target_country_area))
+        # Sélectionner les capitales (les N meilleures villes)
+        capital_cities = cities_sorted[:num_countries]
         
-        # ÉTAPE 3: K-means clustering sur les centres Voronoi
-        positions = np.array([city.position for city in self.cities.cities])
-        region_centers = np.array([self.regions[i].origin for i in range(len(self.regions))])
+        # ÉTAPE 2: Créer pays et assigner régions par propagation d'influence
+        region_to_country = {}  # region_id -> country_id
+        region_influence = {}    # region_id -> influence_value
         
-        # Simple K-means clustering
-        countries = self._kmeans_cluster_regions(region_centers, num_countries)
+        for country_id, capital_city in enumerate(capital_cities):
+            # Créer le pays
+            country_seed = self.seed ^ (country_id * 12345)
+            self.countries.create_country(country_id, seed=country_seed)
+            country_obj = self.countries.get_country(country_id)
+            if country_obj:
+                country_obj.set_capital(capital_city)
+                capital_city.country = country_id
+                
+                # Trouver la région de la capitale
+                closest_region = self._find_closest_region_influence(capital_city.position)
+                if closest_region is not None and closest_region >= 0 and closest_region < len(self.regions):
+                    # Initialiser la propagation d'influence
+                    region_to_country[closest_region] = country_id
+                    region_influence[closest_region] = capital_city.score
+                    country_obj.add_region(closest_region)
         
-        # ÉTAPE 4: Assigner villes aux pays + identifier capitales
+        # ÉTAPE 3: Propagation d'influence (BFS avec influence décroissante)
+        # Créer un mapping region -> capital pour tracker les capitales conquises
+        region_to_capital = {}  # region_id -> capital_city
+        for country_id, capital in enumerate(capital_cities):
+            closest_region = self._find_closest_region_influence(capital.position)
+            if closest_region is not None:
+                region_to_capital[closest_region] = capital
+        
+        self._propagate_influence(region_to_country, region_influence, capital_cities, region_to_capital)
+        
+        # ÉTAPE 4: Assigner les villes aux pays
         city_to_country = {}
-        
-        for region_id, country_id in countries.items():
-            if country_id not in city_to_country:
-                city_to_country[country_id] = []
-                # Créer le pays dans Countries
-                country_seed = self.seed ^ (country_id * 12345)
-                self.countries.create_country(country_id, seed=country_seed)
-                country_obj = self.countries.get_country(country_id)
-                if country_obj:
-                    country_obj.add_region(region_id)
-        
-        # Pour chaque ville, trouver sa région Voronoi, puis son pays
-        for city_idx, city in enumerate(self.cities.cities):
-            closest_region = self._find_closest_region(city.position)
-            country_id = countries.get(closest_region, 0)
-            city.country = country_id
+        for city in self.cities.cities:
+            if city in capital_cities:
+                # Capitale déjà assignée
+                country_id = capital_cities.index(city)
+                city.country = country_id
+            else:
+                # Trouver sa région et son pays
+                closest_region = self._find_closest_region_influence(city.position)
+                if closest_region in region_to_country:
+                    country_id = region_to_country[closest_region]
+                    city.country = country_id
+                else:
+                    # Assigner au pays le plus proche
+                    closest_country = self._find_closest_country(city.position, region_to_country)
+                    country_id = closest_country
+                    city.country = country_id
             
             if country_id not in city_to_country:
                 city_to_country[country_id] = []
             city_to_country[country_id].append(city)
             
-            # Ajouter la ville au pays
+            # Ajouter au pays
             country_obj = self.countries.get_country(country_id)
             if country_obj:
                 country_obj.add_city(city)
         
-        # Identifier capitales (meilleur score par pays)
-        for country_id, cities_in_country in city_to_country.items():
-            if cities_in_country:
-                capital = max(cities_in_country, key=lambda c: c.score)
-                country_obj = self.countries.get_country(country_id)
-                if country_obj:
-                    country_obj.set_capital(capital)
-        
-        # ÉTAPE 4b: Supprimer les pays sans ville
-        empty_countries = []
-        for country_id in list(self.countries.countries.keys()):
-            country_obj = self.countries.get_country(country_id)
-            if country_obj and len(country_obj.cities) == 0:
-                empty_countries.append(country_id)
-                del self.countries.countries[country_id]
-        
-        # ÉTAPE 4c: Générer toutes les données complètes des pays
+        # ÉTAPE 5: Générer les données complètes des pays
         for country_obj in self.countries.countries.values():
             country_obj.generate_full_data()
         
         self.city_to_country = city_to_country
+        self.region_to_country = region_to_country
         
-        # ÉTAPE 5: Ajuster frontières par géographie
-        self._adjust_borders_by_geography(countries)
-        
-        # ÉTAPE 6: Lisser les frontières + supprimer enclaves
-        countries = self._smooth_and_clean_borders(countries)
-        
-        # ÉTAPE 7: Créer zones diplomatiques
-        self._create_diplomatic_zones(countries)
+        # ÉTAPE 6: Créer zones diplomatiques
+        self._create_diplomatic_zones(region_to_country)
         
         elapsed = time.time() - start_time
 
     def _kmeans_cluster_regions(self, region_centers, num_clusters, max_iters=10):
-        """K-means simple pour regrouper les régions Voronoi en pays."""
+        """K-means optimisé pour regrouper les régions Voronoi en pays."""
         num_regions = len(region_centers)
         
         # Initialiser les centroïdes aléatoirement parmi les régions
         np.random.seed(self.seed)
         centroid_indices = np.random.choice(num_regions, num_clusters, replace=False)
-        centroids = region_centers[centroid_indices]
+        centroids = region_centers[centroid_indices].copy()
         
-        assignments = {}  # region_id -> cluster_id
+        assignments = np.zeros(num_regions, dtype=np.int32)
         
         for iteration in range(max_iters):
-            # Assigner chaque région au centroïde le plus proche
-            new_assignments = {}
-            for region_id in range(num_regions):
-                distances = np.linalg.norm(region_centers[region_id] - centroids, axis=1)
-                cluster_id = np.argmin(distances)
-                new_assignments[region_id] = cluster_id
+            # Assigner chaque région au centroïde le plus proche (vectorisé)
+            distances = np.linalg.norm(region_centers[:, np.newaxis, :] - centroids[np.newaxis, :, :], axis=2)
+            new_assignments = np.argmin(distances, axis=1)
             
             # Vérifier convergence
-            if assignments == new_assignments:
+            if np.array_equal(assignments, new_assignments):
                 break
             
             assignments = new_assignments
             
-            # Recalculer centroïdes
+            # Recalculer centroïdes (vectorisé)
             for cluster_id in range(num_clusters):
-                cluster_regions = [r for r, c in assignments.items() if c == cluster_id]
-                if cluster_regions:
-                    centroids[cluster_id] = np.mean(region_centers[cluster_regions], axis=0)
+                mask = assignments == cluster_id
+                if np.any(mask):
+                    centroids[cluster_id] = np.mean(region_centers[mask], axis=0)
         
-        return assignments
+        # Retourner dict pour compatibilité
+        return {region_id: int(assignments[region_id]) for region_id in range(num_regions)}
     
     def _find_closest_region(self, position):
-        """Trouve la région Voronoi la plus proche d'une position."""
+        """Trouve la région Voronoi la plus proche d'une position (avec cache)."""
         if not self.regions:
             return 0
         
+        # Utiliser cache si disponible
+        if not hasattr(self, '_closest_region_cache'):
+            self._closest_region_cache = {}
+            # Pré-calculer les origines
+            if hasattr(self, '_region_origins_array'):
+                pass
+            else:
+                self._region_origins_array = np.array([r.origin if r.origin else (0, 0) for r in self.regions])
+        
+        pos_key = tuple(position)
+        if pos_key in self._closest_region_cache:
+            return self._closest_region_cache[pos_key]
+        
+        # Calcul vectorisé sur un subset de régions (pas toutes)
+        position_arr = np.array(position)
+        distances = np.linalg.norm(self._region_origins_array - position_arr, axis=1)
+        closest = int(np.argmin(distances))
+        
+        self._closest_region_cache[pos_key] = closest
+        return closest
+    
+    def _find_closest_region_influence(self, position):
+        """Trouve la région Voronoi la plus proche d'une position."""
+        if not self.regions:
+            return None
+        
+        position_arr = np.array(position)
         min_dist = float('inf')
-        closest = 0
+        closest = None
         
         for region_id, region in enumerate(self.regions):
             if region.origin:
-                dist = np.linalg.norm(np.array(position) - np.array(region.origin))
+                dist = np.linalg.norm(position_arr - np.array(region.origin))
                 if dist < min_dist:
                     min_dist = dist
                     closest = region_id
         
         return closest
     
-    def _adjust_borders_by_geography(self, countries):
-        """Ajuste les frontières en fonction de la géographie (rivières, montagnes)."""
-        # Pour chaque pixel, si c'est eau/montagne, ajuster l'attribution du pays
-        for y in range(self.height):
-            for x in range(self.width):
-                altitude = self.map[y, x]
-                
-                # Eau : pas de pays
-                if altitude <= self.SEA_LEVEL:
+    def _propagate_influence(self, region_to_country, region_influence, capital_cities, region_to_capital):
+        """Propage l'influence des capitales dans les régions voisines.
+        
+        Règles:
+        - L'influence se propage région par région voisine
+        - L'influence décline de 5-15% aléatoirement
+        - Si rencontre un autre pays: compare les influences
+        - Arrête si influence ≤ 0
+        - Si une région avec capitale est conquise: la capitale perd son statut
+        """
+        from collections import deque
+        
+        # BFS avec priorité d'influence
+        queue = deque()
+        
+        # Initialiser queue avec les capitales
+        for country_id, capital in enumerate(capital_cities):
+            closest_region = self._find_closest_region_influence(capital.position)
+            if closest_region is not None and closest_region in region_to_country:
+                queue.append((closest_region, country_id, capital.score))
+        
+        # Déclin d'influence aléatoire (5-15% par région)
+        np.random.seed(self.seed)
+        
+        while queue:
+            current_region, country_id, current_influence = queue.popleft()
+            
+            # Arrêter si influence trop faible
+            if current_influence <= 0:
+                continue
+            
+            # Vérifier les régions voisines
+            if current_region >= len(self.regions):
+                continue
+            
+            region_obj = self.regions[current_region]
+            if not region_obj.neighbors:
+                continue
+            
+            for neighbor_region in region_obj.neighbors:
+                if neighbor_region < 0 or neighbor_region >= len(self.regions):
                     continue
                 
-                # Haute montagne : peut bloquer le passage entre pays
-                if altitude > 200:
-                    # Vérifier si voisins appartiennent à pays différents
-                    current_region = self._find_closest_region((x, y))
-                    current_country = countries.get(current_region, 0)
+                # Calculer l'influence propagée
+                decline_rate = np.random.uniform(0.05, 0.15)  # 5-15% de déclin
+                next_influence = current_influence * (1 - decline_rate)
+                
+                # Vérifier si la région a déjà un pays
+                if neighbor_region in region_to_country:
+                    neighbor_country = region_to_country[neighbor_region]
+                    neighbor_influence = region_influence.get(neighbor_region, 0)
                     
-                    # Ajouter du "bruit" pour créer des frontières naturelles
-                    for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < self.width and 0 <= ny < self.height:
-                            neighbor_region = self._find_closest_region((nx, ny))
-                            neighbor_country = countries.get(neighbor_region, 0)
-                            
-                            # Si pays différents: montagne devient frontière naturelle
-                            if current_country != neighbor_country:
-                                pass  # Frontière marquée par l'altitude
+                    # Comparer les influences
+                    if next_influence > neighbor_influence:
+                        # Conquête!
+                        region_to_country[neighbor_region] = country_id
+                        region_influence[neighbor_region] = next_influence
+                        
+                        # Ajouter à la queue pour continuer la propagation
+                        queue.append((neighbor_region, country_id, next_influence))
+                        
+                        # Si la région conquise a une capitale: retirer son statut
+                        if neighbor_region in region_to_capital:
+                            fallen_capital = region_to_capital[neighbor_region]
+                            if fallen_capital.is_capital:
+                                # Retirer le statut de capitale
+                                fallen_capital.is_capital = False
+                                old_country = self.countries.get_country(neighbor_country)
+                                if old_country:
+                                    old_country.capital = None
+                        
+                        # Mettre à jour le pays
+                        old_country = self.countries.get_country(neighbor_country)
+                        if old_country and neighbor_region in old_country.regions:
+                            old_country.regions.remove(neighbor_region)
+                        
+                        new_country = self.countries.get_country(country_id)
+                        if new_country:
+                            new_country.add_region(neighbor_region)
+                    # Sinon propagation s'arrête
+                else:
+                    # Région libre: l'annexer
+                    region_to_country[neighbor_region] = country_id
+                    region_influence[neighbor_region] = next_influence
+                    
+                    # Ajouter à la queue
+                    queue.append((neighbor_region, country_id, next_influence))
+                    
+                    # Si la région annexée a une capitale: retirer son statut
+                    if neighbor_region in region_to_capital:
+                        fallen_capital = region_to_capital[neighbor_region]
+                        if fallen_capital.is_capital:
+                            # Retirer le statut de capitale
+                            fallen_capital.is_capital = False
+                            # La ville passe au pays conquérant mais perd son statut de capitale
+                    
+                    # Ajouter au pays
+                    country_obj = self.countries.get_country(country_id)
+                    if country_obj:
+                        country_obj.add_region(neighbor_region)
+    
+    def _find_closest_country(self, position, region_to_country):
+        """Trouve le pays le plus proche d'une position."""
+        closest_region = self._find_closest_region_influence(position)
+        if closest_region is not None and closest_region in region_to_country:
+            return region_to_country[closest_region]
+        
+        # Si aucune région trouvée, chercher parmi les régions assignées
+        min_dist = float('inf')
+        closest_country = 0
+        
+        for region_id, country_id in region_to_country.items():
+            if region_id < len(self.regions) and self.regions[region_id].origin:
+                dist = np.linalg.norm(np.array(position) - np.array(self.regions[region_id].origin))
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_country = country_id
+        
+        return closest_country
+    
+    def _adjust_borders_by_geography(self, countries):
+        """Ajuste les frontières en fonction de la géographie (vectorisé).
+        
+        OPTIMISATION: Au lieu de boucler sur CHAQUE pixel (160 000 itérations),
+        on traite uniquement les frontières et les zones critiques.
+        """
+        # Créer un mapping rapide region_id -> country_id
+        region_to_country_fast = np.zeros(len(self.regions), dtype=np.int32)
+        for region_id, country_id in countries.items():
+            if region_id < len(self.regions):
+                region_to_country_fast[region_id] = country_id
+        
+        # Identifier rapidement les pixels critiques (montagne/eau)
+        high_altitude_mask = self.map > 200
+        low_altitude_mask = self.map <= self.SEA_LEVEL
+        
+        # Traiter les frontières critiques (frontières entre régions + géographie)
+        for region_id in range(len(self.regions)):
+            if not self.regions[region_id].neighbors:
+                continue
+            
+            neighbors = self.regions[region_id].neighbors
+            current_country = region_to_country_fast[region_id]
+            
+            # Vérifier chaque voisin
+            for neighbor_id in neighbors:
+                if neighbor_id < len(self.regions):
+                    neighbor_country = region_to_country_fast[neighbor_id]
+                    
+                    # Si pays différents, cette frontière est critique
+                    # La géographie (rivières, montagnes) sera source de conflit
+                    if current_country != neighbor_country:
+                        # Marquer cette frontière (pas besoin de modifier, juste noter)
+                        pass
     
     def _smooth_and_clean_borders(self, countries):
-        """Lisse les frontières et supprime les petites enclaves."""
+        """Lisse les frontières et supprime les petites enclaves (optimisé)."""
         cleaned = dict(countries)
         
-        # Supprimer petites enclaves (région seule d'un pays)
-        region_country_count = {}
+        # Compter les régions par pays en une seule passe (pas de dictionnaire complexe)
+        region_counts = {}
         for region_id, country_id in cleaned.items():
-            if country_id not in region_country_count:
-                region_country_count[country_id] = 0
-            region_country_count[country_id] += 1
+            region_counts[country_id] = region_counts.get(country_id, 0) + 1
         
         # Fusionner régions isolées avec le pays voisin le plus grand
         for region_id, country_id in list(cleaned.items()):
-            if region_country_count.get(country_id, 0) == 1 and self.regions[region_id].neighbors:
-                # Cette région est seule de son pays, la rattacher au voisin
+            # Vérifier si région isolée
+            if region_counts.get(country_id, 0) == 1 and region_id < len(self.regions) and self.regions[region_id].neighbors:
                 neighbor_regions = self.regions[region_id].neighbors
-                neighbor_countries = [cleaned.get(nr, -1) for nr in neighbor_regions if nr != region_id]
-                neighbor_countries = [c for c in neighbor_countries if c != country_id]
                 
-                if neighbor_countries:
+                # Compter rapidement les pays voisins
+                neighbor_country_counts = {}
+                for nr in neighbor_regions:
+                    if nr != region_id and nr in cleaned:
+                        nc = cleaned[nr]
+                        if nc != country_id:
+                            neighbor_country_counts[nc] = neighbor_country_counts.get(nc, 0) + 1
+                
+                if neighbor_country_counts:
                     # Attacher au pays voisin le plus fréquent
-                    from collections import Counter
-                    most_common_neighbor = Counter(neighbor_countries).most_common(1)[0][0]
+                    most_common_neighbor = max(neighbor_country_counts.items(), key=lambda x: x[1])[0]
+                    
+                    # Mise à jour rapide
                     cleaned[region_id] = most_common_neighbor
-                    region_country_count[country_id] -= 1
-                    region_country_count[most_common_neighbor] += 1
+                    region_counts[country_id] = region_counts.get(country_id, 1) - 1
+                    region_counts[most_common_neighbor] = region_counts.get(most_common_neighbor, 0) + 1
                     
                     # Mettre à jour les pays
                     old_country_obj = self.countries.get_country(country_id)
@@ -1445,22 +1604,34 @@ class Map:
         
         return cleaned
     
-    def _create_diplomatic_zones(self, countries):
-        """Crée des zones tampons/diplomatiques entre pays."""
-        # Identifier les frontières (où deux régions de pays différents se touchent)
+    def _create_diplomatic_zones(self, region_to_country):
+        """Crée des zones tampons/diplomatiques entre pays (optimisé)."""
+        # Utiliser un set pour éviter les doublons
         self.border_regions = set()
         
         # Créer un mapping region_id -> country_id pour accès rapide
-        self.region_to_country = countries.copy()
+        self.region_to_country = region_to_country.copy() if isinstance(region_to_country, dict) else {}
         
-        for region_id, country_id in countries.items():
-            if region_id < len(self.regions) and self.regions[region_id].neighbors:
-                for neighbor_id in self.regions[region_id].neighbors:
-                    if neighbor_id < len(self.regions):
-                        neighbor_country = countries.get(neighbor_id, country_id)
-                        if neighbor_country != country_id:
-                            self.border_regions.add(region_id)
-                            self.border_regions.add(neighbor_id)
+        # Pré-convertir en array pour accès O(1)
+        region_countries_array = np.full(len(self.regions), -1, dtype=np.int32)
+        for region_id, country_id in region_to_country.items():
+            if region_id < len(self.regions):
+                region_countries_array[region_id] = country_id
+        
+        # Identifier rapidement les frontières
+        for region_id in range(len(self.regions)):
+            country_id = region_countries_array[region_id]
+            if country_id == -1 or not self.regions[region_id].neighbors:
+                continue
+            
+            # Vérifier chaque voisin
+            for neighbor_id in self.regions[region_id].neighbors:
+                if neighbor_id < len(self.regions):
+                    neighbor_country = region_countries_array[neighbor_id]
+                    if neighbor_country != country_id and neighbor_country != -1:
+                        self.border_regions.add(region_id)
+                        self.border_regions.add(neighbor_id)
+                        break  # Pas besoin de vérifier autres voisins
     
     def get_country_color_for_region(self, region_id):
         """Retourne la couleur du pays pour une région donnée."""

@@ -70,3 +70,28 @@ class Voronoi:
             origin = tuple(map(int, pt))
             cell = Cell(id=cell_idx, edges=cell_edges, neighbors=[], vertices=verts, origin=origin)
             self.cells.append(cell)
+        
+        # Calculer les voisins en fonction des arêtes partagées
+        self._compute_neighbors()
+    
+    def _compute_neighbors(self):
+        """Calcule les voisins des cellules Voronoi en fonction des vertices partagées."""
+        # Deux cellules sont voisines si elles partagent au moins un vertex (arête)
+        num_cells = len(self.cells)
+        
+        for i in range(num_cells):
+            cell_i = self.cells[i]
+            cell_i_vertices = set(cell_i.vertices)
+            
+            for j in range(i + 1, num_cells):
+                cell_j = self.cells[j]
+                cell_j_vertices = set(cell_j.vertices)
+                
+                # Vérifier si les deux cellules partagent au moins 2 vertices (une arête)
+                shared_vertices = cell_i_vertices & cell_j_vertices
+                if len(shared_vertices) >= 2:
+                    # Cellules voisines
+                    if j not in cell_i.neighbors:
+                        cell_i.neighbors.append(j)
+                    if i not in cell_j.neighbors:
+                        cell_j.neighbors.append(i)

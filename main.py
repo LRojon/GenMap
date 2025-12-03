@@ -104,8 +104,8 @@ class TabSystem:
             {'name': 'Routes', 'icon': '🛣', 'key': pygame.K_4, 'show_legend': False},
             {'name': 'Biomes', 'icon': '🌿', 'key': pygame.K_5, 'show_legend': True},
             {'name': 'Climate', 'icon': '🌡', 'key': pygame.K_6, 'show_legend': True},
-            {'name': 'Religions', 'icon': '⛪', 'key': pygame.K_7, 'show_legend': True},
-            {'name': 'Cultures', 'icon': '🎭', 'key': pygame.K_8, 'show_legend': True},
+            {'name': 'Religions', 'icon': '⛪', 'key': pygame.K_7, 'show_legend': False},
+            {'name': 'Cultures', 'icon': '🎭', 'key': pygame.K_8, 'show_legend': False},
         ]
         self.active_tab = 0
         
@@ -136,10 +136,6 @@ class TabSystem:
             7: 'cultures'
         }
         return modes[self.active_tab]
-    
-    def get_show_legend(self):
-        """Indique si une légende doit être affichée."""
-        return self.tabs[self.active_tab]['show_legend']
     
     def get_active_tab_name(self):
         """Retourne le nom du tab actif."""
@@ -520,16 +516,27 @@ while running:
             if religion_id >= 0 and hasattr(game_map, 'religion_system') and religion_id in game_map.religion_system.religions:
                 religion = game_map.religion_system.religions[religion_id]
                 info_texts = []
-                info_texts.append(f"[RELIGION] {religion.name}")
-                info_texts.append(f"Founded: {religion.founding_year}")
-                info_texts.append(f"Location: {religion.founding_city}")
-                if religion.events:
-                    info_texts.append(f"Events: {len(religion.events)}")
-                    for event in religion.events[:3]:  # Afficher les 3 premiers événements
-                        info_texts.append(f"  - {event.year}: {event.description[:30]}...")
                 
-                # Limiter à 80px de hauteur pour ne pas recouvrir légende
-                max_y = tab_bar_height + map_height - 100
+                # En-tête
+                info_texts.append(f"[RELIGION] {religion.name}")
+                info_texts.append("")
+                
+                # Infos générales
+                info_texts.append(f"> Founded: {religion.founding_year}")
+                info_texts.append(f"> Location: {religion.founding_city}")
+                info_texts.append(f"> Theme: {religion.deity_theme}")
+                info_texts.append("")
+                
+                # Événements historiques
+                if religion.events:
+                    info_texts.append(f"EVENTS ({len(religion.events)}):")
+                    for event in religion.events[:5]:  # Afficher les 5 premiers événements
+                        info_texts.append(f"  {event.year}:")
+                        info_texts.append(f"    {event.event_type}")
+                        info_texts.append(f"    {event.description[:50]}")
+                
+                # Afficher avec limite de hauteur (plus d'espace)
+                max_y = tab_bar_height + map_height - 50
                 for text in info_texts:
                     if y_pos > max_y:
                         break
@@ -544,20 +551,34 @@ while running:
             if culture_id >= 0 and hasattr(game_map, 'religion_system') and culture_id in game_map.religion_system.cultures:
                 culture = game_map.religion_system.cultures[culture_id]
                 info_texts = []
-                info_texts.append(f"[CULTURE] {culture.name}")
-                info_texts.append(f"Origin Region: {culture.origin_region_id}")
-                info_texts.append(f"Climate Type: {culture.climate_type}")
-                info_texts.append(f"Color: RGB{culture.color}")
-                if culture.traits:
-                    info_texts.append("")
-                    info_texts.append("Traits:")
-                    for trait_name, trait_value in culture.traits.items():
-                        info_texts.append(f"  {trait_name}: {trait_value[:40]}...")
                 
-                # Limiter à 80px de hauteur pour ne pas recouvrir légende
-                max_y = tab_bar_height + map_height - 100
+                # En-tête
+                info_texts.append(f"[CULTURE] {culture.name}")
+                info_texts.append("")
+                
+                # Infos générales
+                info_texts.append(f"> Origin Region: {culture.origin_region_id}")
+                info_texts.append(f"> Climate: {culture.climate_type}")
+                info_texts.append("")
+                
+                # Traits détaillés
+                if culture.traits:
+                    info_texts.append("TRAITS:")
+                    if 'values' in culture.traits:
+                        info_texts.append(f"  Values:")
+                        info_texts.append(f"    {culture.traits['values']}")
+                    if 'architecture' in culture.traits:
+                        info_texts.append(f"  Architecture:")
+                        info_texts.append(f"    {culture.traits['architecture']}")
+                    if 'symbols' in culture.traits:
+                        info_texts.append(f"  Symbols:")
+                        info_texts.append(f"    {culture.traits['symbols']}")
+                
+                # Afficher avec limite de hauteur (200px pour plus d'espace)
+                max_y = tab_bar_height + map_height - 50
                 for text in info_texts:
                     if y_pos > max_y:
+                        info_texts_overflow = True
                         break
                     if text:
                         text_surface = tiny_font.render(text, True, (0, 0, 0))
@@ -643,61 +664,6 @@ while running:
             window.blit(label_text, (20, y_pos - 2))
             y_pos += line_height
     
-    # Légende Religions
-    elif display_mode == 'religions':
-        y_pos = tab_bar_height + 120
-        legend_title = small_font.render("Religions Fondamentales:", True, (0, 0, 0))
-        window.blit(legend_title, (5, y_pos))
-        y_pos += line_height + 5
-        
-        # Afficher les religions fondamentales (pas toutes les régions!)
-        religion_names_to_show = game_map.religion_names_foundational if hasattr(game_map, 'religion_names_foundational') else {}
-        
-        for religion_id, religion_name in sorted(religion_names_to_show.items()):
-            if y_pos + 12 > tab_bar_height + map_height - 20:
-                break
-            
-            # Couleur basée sur religion_id
-            rng = random.Random(religion_id)
-            color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
-            
-            # Petit carré de couleur
-            pygame.draw.rect(window, color, (5, y_pos, 12, 12))
-            pygame.draw.rect(window, (0, 0, 0), (5, y_pos, 12, 12), 1)
-            
-            # Nom de la religion (raccourci si trop long)
-            display_name = religion_name
-            name_text = tiny_font.render(display_name, True, (0, 0, 0))
-            window.blit(name_text, (20, y_pos - 2))
-            y_pos += line_height
-    
-    # Légende Cultures
-    elif display_mode == 'cultures':
-        y_pos = tab_bar_height + 120
-        legend_title = small_font.render("Cultures Majeures:", True, (0, 0, 0))
-        window.blit(legend_title, (5, y_pos))
-        y_pos += line_height + 5
-        
-        # Afficher seulement les cultures majeures (pas toutes les régions!)
-        culture_names_to_show = game_map.culture_names_major if hasattr(game_map, 'culture_names_major') else {}
-        
-        for region_id, culture_name in sorted(culture_names_to_show.items()):
-            if y_pos + 12 > tab_bar_height + map_height - 20:
-                break
-            
-            # Couleur basée sur region_id avec offset
-            rng = random.Random(region_id ^ 777)
-            color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
-            
-            # Petit carré de couleur
-            pygame.draw.rect(window, color, (5, y_pos, 12, 12))
-            pygame.draw.rect(window, (0, 0, 0), (5, y_pos, 12, 12), 1)
-            
-            # Nom de la culture
-            display_name = culture_name
-            name_text = tiny_font.render(display_name, True, (0, 0, 0))
-            window.blit(name_text, (20, y_pos - 2))
-            y_pos += line_height
 
     # ========== BARRE D'INFO EN BAS ==========
     # Remplir la barre d'info avec une couleur de fond
