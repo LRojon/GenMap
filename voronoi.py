@@ -53,17 +53,30 @@ class Voronoi:
         # Build cells and edges
         for cell_idx, (region, pt) in enumerate(zip(regions, points)):
             polygon = vertices[region]
-            if len(polygon) < 4:
+            if len(polygon) < 3:  # Accepter les triangles aussi (>= 3 vertices)
                 continue
             poly = Polygon(polygon).intersection(rect)
             if poly.is_empty or poly.geom_type != 'Polygon':
                 continue
             # Sommets du polygone de la cellule
-            verts = [tuple(map(int, p)) for p in poly.exterior.coords]
-            # Edges
+            # poly.exterior.coords inclut le point de fermeture dupliqué, on le retire
+            verts_raw = [tuple(map(int, p)) for p in poly.exterior.coords]
+            # Retirer le dernier point s'il est identique au premier (fermeture)
+            if len(verts_raw) > 1 and verts_raw[0] == verts_raw[-1]:
+                verts = verts_raw[:-1]
+            else:
+                verts = verts_raw
+            
+            # Assurer au moins 3 vertices (triangle minimum)
+            if len(verts) < 3:
+                continue
+            
+            # Edges - fermer le polygone correctement
             cell_edges = []
-            for i in range(len(verts)-1):
-                edge = Edge(verts[i], verts[i+1])
+            for i in range(len(verts)):
+                p1 = verts[i]
+                p2 = verts[(i + 1) % len(verts)]  # Boucler pour fermer le polygone
+                edge = Edge(p1, p2)
                 self.edges.append(edge)
                 cell_edges.append(edge)
             # Point d'origine (centre de la cellule)

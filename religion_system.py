@@ -93,8 +93,6 @@ class ReligionSystem:
     
     def generate_foundational_religions(self):
         """Crée les religions initiales dans les villes majeures."""
-        print(f"⛪ Génération des religions fondamentales...")
-        
         # Sélectionner villes majeures comme foyers religieux (villes capitales + grandes villes)
         major_cities = []
         for country_id, country in self.map_obj.countries.countries.items():
@@ -140,15 +138,11 @@ class ReligionSystem:
         
         # Stocker aussi les religions fondamentales pour affichage UI
         self.foundational_religions = self.religions.copy()
-        
-        print(f"✅ {len(self.religions)} religions fondamentales créées")
     
     def propagate_religions(self):
         """Propage les religions depuis leurs villes d'origine."""
-        print(f"📣 Propagation des religions...")
         
         if not hasattr(self.map_obj, 'cities') or not self.map_obj.cities:
-            print("⚠ Pas de villes trouvées")
             return
         
         # Mapping: ville -> liste d'objets religieux présents
@@ -166,8 +160,6 @@ class ReligionSystem:
         
         # Assigner religions aux villes
         self._assign_religions_to_cities(city_religions)
-        
-        print(f"✅ Propagation religieuse complétée")
     
     def _propagate_single_religion(self, religion: Religion, city_religions: Dict):
         """Propage UNE religion via BFS depuis sa ville d'origine."""
@@ -316,7 +308,6 @@ class ReligionSystem:
     
     def generate_culture_from_regions(self):
         """Placeholder - la génération de cultures se fait maintenant dans propagate_cultures()."""
-        print(f"🎨 Génération des cultures (via propagation)...")
         # Désormais intégré à propagate_cultures()
     
     def propagate_cultures(self):
@@ -327,10 +318,8 @@ class ReligionSystem:
         L'influence se propage aux régions voisines en déclinant de 15% par région.
         Quand deux cultures se rencontrent, la plus influente l'emporte.
         """
-        print(f"🎭 Propagation des cultures par influence régionale...")
         
         if not hasattr(self.map_obj, 'regions') or not hasattr(self.map_obj, 'region_to_country'):
-            print("⚠ Pas de régions ou mapping région→pays trouvé")
             return
         
         from city import ProcNameGenerator
@@ -361,9 +350,6 @@ class ReligionSystem:
         # Formule: 3 + (num_regions - 50) / 50, clampé entre 3 et 8
         num_seeds = max(3, min(8, 3 + (num_terrestrial_regions - 50) // 50))
         
-        print(f"  Monde: {len(self.map_obj.regions)} régions, {num_terrestrial_regions} régions terrestres")
-        print(f"  Création de {num_seeds} berceaux culturels...")
-        
         # ÉTAPE 1: Sélectionner aléatoirement les régions berceaux
         culture_seeds = {}  # region_id -> (culture_id, influence, culture_obj)
         region_to_culture_influence = {}  # region_id -> {culture_id: influence}
@@ -375,8 +361,6 @@ class ReligionSystem:
             selected_seed_regions = random.sample(terrestrial_regions, num_seeds)
         else:
             selected_seed_regions = terrestrial_regions
-        
-        print(f"  Sélection de {len(selected_seed_regions)} berceaux aléatoires...")
         
         for seed_region_id in selected_seed_regions:
             # Générer une culture pour ce berceau
@@ -419,10 +403,7 @@ class ReligionSystem:
             
             culture_id += 1
         
-        print(f"  ✓ {len(culture_seeds)} berceaux culturels créés")
-        
         # ÉTAPE 2: Propagation BFS de l'influence depuis chaque berceau
-        print(f"  Propagation de l'influence culturelle...")
         
         for origin_region_id, (origin_culture_id, initial_influence, origin_culture) in culture_seeds.items():
             # BFS depuis ce berceau
@@ -461,10 +442,7 @@ class ReligionSystem:
                         if next_influence > 1:  # Seuil minimum
                             queue.append((neighbor_id, next_influence))
         
-        print(f"  ✓ Influence propagée")
-        
         # ÉTAPE 3: Résoudre conflits - pour chaque région, la culture avec la plus grande influence l'emporte
-        print(f"  Résolution des conflits culturels...")
         
         region_to_culture = {}  # region_id -> culture_id
         
@@ -493,8 +471,6 @@ class ReligionSystem:
         
         # Stocker le mapping
         self.region_to_culture = region_to_culture
-        
-        print(f"✅ Propagation culturelle complétée ({len(region_to_culture)} régions, {len(self.cultures)} cultures)")
     
     def _get_biome_variant_for_region(self, region_id: int):
         """Détermine la variante biome d'une région (côtier, montagne, etc.)."""
@@ -660,7 +636,6 @@ class ReligionSystem:
     
     def apply_cultural_diffusion(self, iterations: int = 2):
         """Applique diffusion culturelle depuis les régions vers les régions voisines."""
-        print(f"🔀 Diffusion culturelle...")
         
         try:
             import scipy.ndimage as ndimage
@@ -668,10 +643,8 @@ class ReligionSystem:
             # TODO: Implémenter diffusion spatiale
             for _ in range(iterations):
                 pass
-            
-            print(f"✅ Diffusion culturelle appliquée")
         except:
-            print("⚠ Scipy non disponible pour diffusion")
+            pass
     
     def get_religion_map(self) -> np.ndarray:
         """Retourne la carte spatiale des religions."""

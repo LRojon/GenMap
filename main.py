@@ -51,7 +51,7 @@ def get_climate_color(climate_value: int):
 seed = sys.argv[1] if len(sys.argv) > 1 else None
 
 pygame.init()
-map_width, map_height = 400, 400
+map_width, map_height = 800, 800
 info_panel_width = 280  # Largeur du panneau d'infos sur la gauche (augmentée encore de 220)
 tab_bar_height = 40    # Hauteur de la barre de tabs en haut
 info_bar_height = 50   # Hauteur de la barre d'info en bas
@@ -62,16 +62,14 @@ total_height = map_height + tab_bar_height + info_bar_height
 window = pygame.display.set_mode((total_width, total_height))
 pygame.display.set_caption("Map")
 
-startTime = time.time()
-elapsed = 0.0
+
 seed = int(seed) if seed is not None else time.time_ns() % (2**32)
+startTime = time.time()
 game_map = Map(map_width, map_height, seed)
-elapsed += time.time() - startTime
-print(f"Génération de la map en {time.time() - startTime:.2f}s avec le seed {seed}")
-print(f"Nombre de villes : {len(game_map.cities.cities)}")
-print(f"Nombre de routes : {len(game_map.routes)}")
-if game_map.routes:
-    print(f"Longueur moyenne des routes : {sum(len(r) for r in game_map.routes) / len(game_map.routes):.1f} pixels")
+total_time = time.time() - startTime
+print(f"\n{'='*60}")
+print(f"✅ Génération complète en {total_time:.2f}s (seed: {seed})")
+print(f"{'='*60}\n")
 
 # Générer des couleurs pour les pays
 num_countries = len(set(c.country for c in game_map.cities.cities if c.country is not None))
@@ -198,6 +196,63 @@ class TabSystem:
 
 tab_system = TabSystem(0, 0, tab_bar_height, map_width, info_panel_width, font)
 
+def get_city_at_position(game_map, position, radius=10):
+    """Trouve une ville à une position donnée (avec un rayon de détection)."""
+    x, y = position
+    if not hasattr(game_map, 'cities') or not game_map.cities.cities:
+        return None
+    
+    # Chercher si une ville est proche de cette position
+    closest_city = None
+    closest_dist = radius
+    
+    for city in game_map.cities.cities:
+        dist = ((city.position[0] - x)**2 + (city.position[1] - y)**2)**0.5
+        if dist < closest_dist:
+            closest_city = city
+            closest_dist = dist
+    
+    return closest_city
+
+def get_country_at_position(game_map, position):
+    """Trouve le pays à une position donnée sur la carte."""
+    x, y = position
+    if not hasattr(game_map, 'regions') or not hasattr(game_map, 'region_to_country'):
+        return None
+    
+    # Chercher quelle région contient ce pixel
+    for region_id, region in enumerate(game_map.regions):
+        if hasattr(region, 'vertices') and region.vertices:
+            # Vérifier si le point est dans le polygone
+            if point_in_polygon((x, y), region.vertices):
+                # Retourner le pays de cette région
+                country_id = game_map.region_to_country.get(region_id, None)
+                if country_id is not None:
+                    return game_map.countries.get_country(country_id)
+    
+    return None
+
+def point_in_polygon(point, polygon):
+    """Vérifie si un point est à l'intérieur d'un polygone (ray casting)."""
+    x, y = point
+    n = len(polygon)
+    inside = False
+    xinters = 0
+    
+    p1x, p1y = polygon[0]
+    for i in range(1, n + 1):
+        p2x, p2y = polygon[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    
+    return inside
+
 running = True
 mouse_value = None
 mouse_pos = (0, 0)
@@ -220,12 +275,10 @@ while running:
                 os.makedirs('screenshots', exist_ok=True)
                 filename = datetime.now().strftime('screenshots/screenshot_%Y%m%d_%H%M%S.png')
                 pygame.image.save(window, filename)
-                print(f"Screenshot sauvegardé : {filename}")
             elif event.key == pygame.K_RETURN:
                 # Régénération rapide du monde avec un nouveau seed
                 seed = time.time_ns() % (2**32)
                 game_map = Map(map_width, map_height, seed)
-                print(f"Nouveau monde généré avec le seed {seed}")
                 # Régénérer les couleurs des pays
                 num_countries = len(set(c.country for c in game_map.cities.cities if c.country is not None))
                 country_colors = {}
@@ -240,8 +293,17 @@ while running:
     mx, my = mouse_pos[0] - info_panel_width, mouse_pos[1] - tab_bar_height
     
     # Vérifier si la souris est dans la zone de la carte
+    hovered_country = None
+    hovered_city = None
     if 0 <= mx < map_width and 0 <= my < map_height:
         mouse_value = game_map.map[my][mx]
+        # Chercher d'abord une ville près du curseur
+        hovered_city = get_city_at_position(game_map, (mx, my), radius=15)
+        if hovered_city and hovered_city.country:
+            hovered_country = hovered_city.country
+        else:
+            # Sinon chercher le territoire survolé
+            hovered_country = get_country_at_position(game_map, (mx, my))
     else:
         mouse_value = None
 
@@ -389,8 +451,8 @@ while running:
                     except:
                         pass
     
-    # Affichage des routes (mode Routes et tous les autres)
-    if display_mode in ['terrain', 'routes']:
+    # Affichage des routes (mode Routes, Countries, et tous les autres)
+    if display_mode in ['terrain', 'routes', 'countries']:
         for route in game_map.routes:
             if route:
                 for pt in route:
@@ -682,8 +744,15 @@ while running:
     coord_surface = small_font.render(coord_text, True, (0, 0, 0))
     window.blit(coord_surface, (10, tab_bar_height + map_height + 5))
     
-    # Info centre : Pays et villes
-    if hasattr(game_map, 'countries'):
+    # Info centre : Pays et villes, ou infos du pays survolé
+    if hovered_country is not None:
+        # Afficher les infos du pays survolé
+        capital_name = hovered_country.capital.name if hovered_country.capital else "Aucune"
+        hovering_text = f"🏛 {hovered_country.name:15} | Cap: {capital_name:15} | Pop: {hovered_country.population:5} | Rég: {len(hovered_country.regions):3}"
+        hovering_surface = small_font.render(hovering_text, True, (50, 50, 50))
+        hovering_rect = hovering_surface.get_rect(center=(total_width // 2, tab_bar_height + map_height + 16))
+        window.blit(hovering_surface, hovering_rect)
+    elif hasattr(game_map, 'countries'):
         num_countries = game_map.countries.get_num_countries()
         num_cities = len(game_map.cities.cities)
         center_text = f"Pays: {num_countries:2d}  |  Villes: {num_cities:2d}  |  Routes: {len(game_map.routes):3d}"

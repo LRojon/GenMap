@@ -805,7 +805,7 @@ class Map:
             self._diffuse_religions_and_cultures()
             
         except Exception as e:
-            print(f"⚠ Erreur génération religions/cultures: {e}")
+            pass
     
     def _diffuse_religions_and_cultures(self, iterations: int = 2):
         """Applique une légère diffusion pour créer des transitions organiques."""
@@ -865,9 +865,6 @@ class Map:
                 self.culture_names_major[culture_id] = culture.name
             
         except Exception as e:
-            print(f"⚠ Erreur dans système religieux complet: {e}")
-            import traceback
-            traceback.print_exc()
             # Fallback vers l'ancienne méthode
             self.generate_religions_and_cultures()
     
@@ -955,7 +952,7 @@ class Map:
             self._diffuse_religions_and_cultures(iterations=2)
             
         except Exception as e:
-            print(f"⚠ Erreur création maps religions/cultures: {e}")
+            pass
 
     def genRiver(self, start: tuple[int, int], seed: int = 0, width: int = 1):
         """Génération de rivière (optimisée)."""
@@ -1467,6 +1464,9 @@ class Map:
                         # Ajouter à la queue pour continuer la propagation
                         queue.append((neighbor_region, country_id, next_influence))
                         
+                        # Mettre à jour les villes dans cette région (y compris les capitales!)
+                        self._update_cities_in_region(neighbor_region, country_id)
+                        
                         # Si la région conquise a une capitale: retirer son statut
                         if neighbor_region in region_to_capital:
                             fallen_capital = region_to_capital[neighbor_region]
@@ -1494,6 +1494,9 @@ class Map:
                     # Ajouter à la queue
                     queue.append((neighbor_region, country_id, next_influence))
                     
+                    # Mettre à jour les villes dans cette région
+                    self._update_cities_in_region(neighbor_region, country_id)
+                    
                     # Si la région annexée a une capitale: retirer son statut
                     if neighbor_region in region_to_capital:
                         fallen_capital = region_to_capital[neighbor_region]
@@ -1506,6 +1509,40 @@ class Map:
                     country_obj = self.countries.get_country(country_id)
                     if country_obj:
                         country_obj.add_region(neighbor_region)
+    
+    def _update_cities_in_region(self, region_id, new_country_id):
+        """Met à jour le pays de toutes les villes dans une région."""
+        if not hasattr(self, 'regions') or region_id >= len(self.regions):
+            return
+        
+        region = self.regions[region_id]
+        if not hasattr(region, 'vertices') or not region.vertices:
+            return
+        
+        new_country = self.countries.get_country(new_country_id)
+        old_country = None
+        
+        # Chercher toutes les villes dans cette région
+        for city in self.cities.cities:
+            # Trouver la région la plus proche de la ville
+            closest_region = self._find_closest_region_influence(city.position)
+            if closest_region == region_id:
+                # Retirer la ville de l'ancien pays
+                if city.country is not None:
+                    old_country = self.countries.get_country(city.country)
+                    if old_country and city in old_country.cities:
+                        old_country.cities.remove(city)
+                
+                # Ajouter la ville au nouveau pays
+                city.country = new_country_id
+                if new_country and city not in new_country.cities:
+                    new_country.cities.append(city)
+        
+        # Recalculer les stats des pays affectés
+        if new_country:
+            new_country.generate_full_data()
+        if old_country:
+            old_country.generate_full_data()
     
     def _find_closest_country(self, position, region_to_country):
         """Trouve le pays le plus proche d'une position."""
