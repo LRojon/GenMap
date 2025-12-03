@@ -51,7 +51,7 @@ def get_climate_color(climate_value: int):
 seed = sys.argv[1] if len(sys.argv) > 1 else None
 
 pygame.init()
-map_width, map_height = 800, 800
+map_width, map_height = 400, 400
 info_panel_width = 280  # Largeur du panneau d'infos sur la gauche (augmentée encore de 220)
 tab_bar_height = 40    # Hauteur de la barre de tabs en haut
 info_bar_height = 50   # Hauteur de la barre d'info en bas
@@ -385,8 +385,8 @@ while running:
             for x in range(map_width):
                 culture_id = int(game_map.cultures[y, x])  # Convertir uint32 vers int
                 
-                # Ignorer les pixels sans culture (-1)
-                if culture_id < 0:
+                # Ignorer les pixels sans culture (-1) et l'eau (255)
+                if culture_id < 0 or culture_id == 255:
                     continue
                 
                 # Utiliser la couleur depuis le ReligionSystem si disponible
@@ -448,6 +448,68 @@ while running:
                     try:
                         pygame.draw.line(window, (255, 255, 255), (info_panel_width + p1[0], tab_bar_height + p1[1]), 
                                        (info_panel_width + p2[0], tab_bar_height + p2[1]), 2)
+                    except:
+                        pass
+    
+    # Dessiner les contours des cultures - SEULEMENT en mode Cultures
+    if display_mode == 'cultures' and hasattr(game_map, 'cultures') and hasattr(game_map, 'map'):
+        # Récupérer le niveau de la mer
+        sea_level = 127  # Défaut
+        if hasattr(game_map, 'SEA_LEVEL'):
+            sea_level = game_map.SEA_LEVEL
+        
+        # Détection manuelle des frontières entre cultures
+        for y in range(1, map_height - 1):
+            for x in range(1, map_width - 1):
+                current_culture = int(game_map.cultures[y, x])
+                
+                # Ignorer l'eau et les pixels sans culture
+                if current_culture < 0 or current_culture == 255:
+                    continue
+                
+                # Vérifier si c'est un pixel côtier ou une frontière culturelle
+                current_altitude = game_map.map[y, x] if hasattr(game_map, 'map') else 255
+                is_coastal = current_altitude > sea_level  # Sur terre
+                
+                is_frontier = False
+                
+                # Vérifier les 4 voisins
+                neighbors = [
+                    int(game_map.cultures[y-1, x]),  # haut
+                    int(game_map.cultures[y+1, x]),  # bas
+                    int(game_map.cultures[y, x-1]),  # gauche
+                    int(game_map.cultures[y, x+1]),  # droite
+                ]
+                
+                neighbor_altitudes = [
+                    game_map.map[y-1, x],
+                    game_map.map[y+1, x],
+                    game_map.map[y, x-1],
+                    game_map.map[y, x+1]
+                ]
+                
+                # C'est une frontière si:
+                # 1. Au moins un voisin a une culture différente (et pas l'eau)
+                # 2. OU au moins un voisin est dans l'eau (bord de terre)
+                for neighbor_culture, neighbor_altitude in zip(neighbors, neighbor_altitudes):
+                    if neighbor_culture != current_culture and neighbor_culture != 255:
+                        is_frontier = True
+                        break
+                    if neighbor_altitude <= sea_level:  # Voisin dans l'eau = bord côtier
+                        is_frontier = True
+                        break
+                
+                if is_frontier:
+                    # Obtenir la couleur de la culture
+                    if hasattr(game_map, 'religion_system') and current_culture in game_map.religion_system.cultures:
+                        color = game_map.religion_system.cultures[current_culture].color
+                    else:
+                        # Fallback: générer une couleur
+                        rng = random.Random(current_culture ^ 777)
+                        color = (rng.randint(50, 200), rng.randint(50, 200), rng.randint(50, 200))
+                    
+                    try:
+                        window.set_at((info_panel_width + x, tab_bar_height + y), color)
                     except:
                         pass
     

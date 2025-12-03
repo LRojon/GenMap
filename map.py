@@ -837,8 +837,8 @@ class Map:
             # Générer cultures par région
             religion_sys.generate_culture_from_regions()
             
-            # Propager cultures depuis leurs villes d'origine
-            religion_sys.propagate_cultures()
+            # Propager cultures via bruit de Perlin (nouvelle méthode)
+            religion_sys.propagate_cultures_perlin()
             
             # Appliquer diffusion culturelle
             religion_sys.apply_cultural_diffusion()
@@ -882,71 +882,70 @@ class Map:
         if not hasattr(self, 'culture_names'):
             self.culture_names = {}
         
-        # Remplir les cartes spatiales depuis les régions
         try:
-            # Mapper religions aux régions Voronoi
-            region_religions = {}  # region_id -> religion_id
-            region_cultures = {}   # region_id -> culture_id
+            # Utiliser directement la culture_map du bruit de Perlin
+            if hasattr(religion_sys, 'culture_map') and religion_sys.culture_map is not None:
+                self.cultures = religion_sys.culture_map.copy()
+                
+                # Construire le mapping des noms de cultures
+                for culture_id, culture_obj in religion_sys.cultures.items():
+                    self.culture_names[culture_id] = culture_obj.name
+            else:
+                # Fallback si culture_map n'existe pas
+                pass
             
-            # Assigner religions aux régions basé sur city.religion (propagation)
-            for region_id, region in enumerate(self.regions):
-                if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
-                    # Trouver le centroid de la région
-                    vertices = region.vertices
-                    centroid_x = sum(v[0] for v in vertices) / len(vertices)
-                    centroid_y = sum(v[1] for v in vertices) / len(vertices)
-                    centroid = (centroid_x, centroid_y)
-                    
-                    # Trouver la ville la plus proche du centroid
-                    closest_city = None
-                    min_dist = float('inf')
-                    
-                    for city in self.cities.cities:
-                        dist = ((city.position[0] - centroid[0])**2 + (city.position[1] - centroid[1])**2)**0.5
-                        if dist < min_dist:
-                            min_dist = dist
-                            closest_city = city
-                    
-                    # Assigner la religion de la ville la plus proche
-                    if closest_city and hasattr(closest_city, 'religion') and closest_city.religion:
-                        religion_name = closest_city.religion
-                        religion_id = hash(religion_name) % (2**31)
-                        region_religions[region_id] = religion_id
+            # Remplir les cartes spatiales depuis les régions pour religions
+            try:
+                # Mapper religions aux régions Voronoi
+                region_religions = {}  # region_id -> religion_id
+                
+                # Assigner religions aux régions basé sur city.religion (propagation)
+                for region_id, region in enumerate(self.regions):
+                    if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
+                        # Trouver le centroid de la région
+                        vertices = region.vertices
+                        centroid_x = sum(v[0] for v in vertices) / len(vertices)
+                        centroid_y = sum(v[1] for v in vertices) / len(vertices)
+                        centroid = (centroid_x, centroid_y)
                         
-                        if region_id not in self.religion_names:
-                            self.religion_names[region_id] = religion_name
-            
-            # Cultures: utiliser la propagation par régions voisines du ReligionSystem
-            if hasattr(religion_sys, 'region_to_culture'):
-                for region_id, culture_id_source in religion_sys.region_to_culture.items():
-                    culture = religion_sys.cultures.get(culture_id_source)
-                    if culture:
-                        # Utiliser directement l'ID de culture de ReligionSystem
-                        region_cultures[region_id] = culture_id_source
+                        # Trouver la ville la plus proche du centroid
+                        closest_city = None
+                        min_dist = float('inf')
                         
-                        if region_id not in self.culture_names:
-                            self.culture_names[region_id] = culture.name
-            
-            # Remplir les pixels des régions Voronoi
-            for region_id, region in enumerate(self.regions):
-                if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
-                    vertices = region.vertices
-                    try:
-                        rr, cc = ski_polygon([v[1] for v in vertices], 
-                                            [v[0] for v in vertices], 
-                                            shape=(self.height, self.width))
+                        for city in self.cities.cities:
+                            dist = ((city.position[0] - centroid[0])**2 + (city.position[1] - centroid[1])**2)**0.5
+                            if dist < min_dist:
+                                min_dist = dist
+                                closest_city = city
                         
-                        religion_id = region_religions.get(region_id, -1)  # -1 si pas trouvé
-                        culture_id = region_cultures.get(region_id, -1)    # -1 si pas trouvé
-                        
-                        for r, c in zip(rr, cc):
-                            if 0 <= r < self.height and 0 <= c < self.width:
-                                if religion_id >= 0:
-                                    self.religions[r, c] = religion_id
-                                if culture_id >= 0:
-                                    self.cultures[r, c] = culture_id
-                    except:
-                        pass
+                        # Assigner la religion de la ville la plus proche
+                        if closest_city and hasattr(closest_city, 'religion') and closest_city.religion:
+                            religion_name = closest_city.religion
+                            religion_id = hash(religion_name) % (2**31)
+                            region_religions[region_id] = religion_id
+                            
+                            if region_id not in self.religion_names:
+                                self.religion_names[region_id] = religion_name
+                
+                # Remplir les pixels des régions Voronoi pour religions
+                for region_id, region in enumerate(self.regions):
+                    if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
+                        vertices = region.vertices
+                        try:
+                            rr, cc = ski_polygon([v[1] for v in vertices], 
+                                                [v[0] for v in vertices], 
+                                                shape=(self.height, self.width))
+                            
+                            religion_id = region_religions.get(region_id, -1)  # -1 si pas trouvé
+                            
+                            for r, c in zip(rr, cc):
+                                if 0 <= r < self.height and 0 <= c < self.width:
+                                    if religion_id >= 0:
+                                        self.religions[r, c] = religion_id
+                        except:
+                            pass
+            except Exception as e:
+                pass
             
             # Appliquer diffusion légère
             self._diffuse_religions_and_cultures(iterations=2)

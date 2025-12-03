@@ -472,6 +472,116 @@ class ReligionSystem:
         # Stocker le mapping
         self.region_to_culture = region_to_culture
     
+    def propagate_cultures_perlin(self):
+        """Génère les cultures basées sur du bruit de Perlin par culture.
+        
+        Chaque culture a son propre champ de bruit Perlin.
+        L'influence de la culture = valeur du bruit Perlin à cette position.
+        Pour chaque pixel, on prend la culture avec la plus grande influence.
+        """
+        if not hasattr(self.map_obj, 'width') or not hasattr(self.map_obj, 'height'):
+            return
+        
+        from noise import PerlinNoise
+        
+        width = self.map_obj.width
+        height = self.map_obj.height
+        
+        # Déterminer nombre de cultures
+        num_terrestrial_regions = sum(1 for region in self.map_obj.regions 
+                                      if hasattr(region, 'vertices') and region.vertices)
+        num_cultures = max(3, min(8, 3 + (num_terrestrial_regions - 50) // 50))
+        
+        # Créer les cultures avec leurs champs de bruit
+        culture_noises = {}
+        culture_objects = {}
+        
+        for culture_id in range(num_cultures):
+            # Générer un bruit de Perlin unique pour cette culture
+            culture_seed = self.map_obj.seed ^ (culture_id * 777)
+            noise = PerlinNoise(culture_seed)
+            
+            # Générer la grille de bruit (normalisée 0-255)
+            noise_grid = noise.octave_noise_grid(width, height, octaves=6, persistence=0.6, scale=0.008)
+            noise_grid = ((noise_grid + 1) / 2 * 255).astype(np.uint8)
+            culture_noises[culture_id] = noise_grid
+            
+            # Créer l'objet culture
+            from city import ProcNameGenerator
+            culture_name = ProcNameGenerator.generate_culture_name(culture_seed)
+            
+            # Trouver une région d'origine (celle avec le plus fort bruit pour cette culture)
+            max_noise_val = 0
+            origin_region_id = 0
+            if hasattr(self.map_obj, 'regions'):
+                for region_id, region in enumerate(self.map_obj.regions):
+                    if hasattr(region, 'vertices') and region.vertices:
+                        vertices = region.vertices
+                        cx = int(np.mean([v[0] for v in vertices]))
+                        cy = int(np.mean([v[1] for v in vertices]))
+                        
+                        if 0 <= cy < height and 0 <= cx < width:
+                            noise_val = noise_grid[cy, cx]
+                            if noise_val > max_noise_val:
+                                max_noise_val = noise_val
+                                origin_region_id = region_id
+            
+            culture_obj = Culture(
+                culture_id=culture_id,
+                name=culture_name,
+                seed=culture_seed,
+                origin_region_id=origin_region_id
+            )
+            culture_objects[culture_id] = culture_obj
+            self.cultures[culture_id] = culture_obj
+        
+        # Créer la carte de cultures pixel par pixel
+        culture_map = np.zeros((height, width), dtype=np.uint8)
+        
+        # Récupérer le niveau de la mer depuis Map
+        from map import Map
+        sea_level = Map.SEA_LEVEL
+        
+        for y in range(height):
+            for x in range(width):
+                # Vérifier si ce pixel est sur terre (pas dans l'eau)
+                if hasattr(self.map_obj, 'map') and self.map_obj.map is not None:
+                    altitude = self.map_obj.map[y, x]
+                    
+                    # Ignorer les pixels sous le niveau de la mer
+                    if altitude <= sea_level:
+                        culture_map[y, x] = 255  # Marquer comme "eau" (pas de culture)
+                        continue
+                
+                max_influence = 0
+                winning_culture_id = 0
+                
+                # Trouver la culture avec l'influence la plus forte
+                for culture_id, noise_grid in culture_noises.items():
+                    influence = noise_grid[y, x]
+                    if influence > max_influence:
+                        max_influence = influence
+                        winning_culture_id = culture_id
+                
+                culture_map[y, x] = winning_culture_id
+        
+        # Stocker la carte
+        self.culture_map = culture_map
+        self.region_to_culture = {}  # Créer un mapping région -> culture depuis la carte
+        
+        # Remplir le mapping région -> culture
+        if hasattr(self.map_obj, 'regions'):
+            for region_id, region in enumerate(self.map_obj.regions):
+                if hasattr(region, 'vertices') and region.vertices and len(region.vertices) >= 3:
+                    # Prendre la culture du centroid de la région
+                    vertices = region.vertices
+                    cx = int(np.mean([v[0] for v in vertices]))
+                    cy = int(np.mean([v[1] for v in vertices]))
+                    
+                    if 0 <= cy < height and 0 <= cx < width:
+                        culture_id = culture_map[cy, cx]
+                        self.region_to_culture[region_id] = culture_id
+    
     def _get_biome_variant_for_region(self, region_id: int):
         """Détermine la variante biome d'une région (côtier, montagne, etc.)."""
         if not hasattr(self.map_obj, 'regions') or region_id >= len(self.map_obj.regions):

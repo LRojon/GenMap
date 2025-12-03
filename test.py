@@ -39,15 +39,14 @@ while running:
             nv2 = n2[x][y]
             nv3 = n3[x][y]
 
-            color = (
-               int(c1[0] * (nv1 / 255)) + int(c2[0] * (nv2 / 255)) + int(c3[0] * (nv3 / 255)),
-               int(c1[1] * (nv1 / 255)) + int(c2[1] * (nv2 / 255)) + int(c3[1] * (nv3 / 255)),
-               int(c1[2] * (nv1 / 255)) + int(c2[2] * (nv2 / 255)) + int(c3[2] * (nv3 / 255)),
-            )
+            color = (0, 0, 0)
+            if nv1 >= nv2 and nv1 >= nv3:
+                color = c1
+            elif nv2 >= nv1 and nv2 >= nv3:
+                color = c2
+            elif nv3 >= nv1 and nv3 >= nv2:
+                color = c3
 
-            r = int((nv1 + 1) / 2 * c1[0])
-            g = int((nv2 + 1) / 2 * c2[1])
-            b = int((nv3 + 1) / 2 * c3[2])
-            window.set_at((x, y), (r, g, b))
+            window.set_at((x, y), color)
 
     pygame.display.flip()
