@@ -20,6 +20,7 @@ class Colors:
             (128, 128, 128),  # Rock
             (255, 255, 255)   # Snow
         ]
+        print(self.colors)
 
     @staticmethod
     def get_instance():

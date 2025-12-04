@@ -1,0 +1,290 @@
+/**
+ * Optimisations de performance CSS et effets avancés
+ * À importer si besoin de fonctionnalités de niveau entreprise
+ */
+
+/* GPU Acceleration */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Smooth rendering */
+.smooth-render {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: white;
+    color: black;
+  }
+
+  .glass-card {
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: none;
+  }
+}
+
+/* Dark mode support (future) */
+@media (prefers-color-scheme: dark) {
+  /* À implémenter */
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+  .glass-card {
+    border-width: 2px;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  button {
+    padding: 16px 20px;
+    min-height: 44px;
+  }
+
+  .slider {
+    height: 12px;
+  }
+}
+
+/* Landscape orientation */
+@media (orientation: landscape) and (max-height: 500px) {
+  .control-panel {
+    max-height: 100vh;
+    width: 300px;
+  }
+}
+
+/* Ultra-wide screens */
+@media (min-width: 2000px) {
+  .control-panel {
+    width: 400px;
+    padding: 40px 30px;
+  }
+
+  .panel-title {
+    font-size: 32px;
+  }
+}
+
+/* Retina displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  canvas {
+    image-rendering: -webkit-optimize-contrast;
+  }
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(102, 126, 234, 0.8);
+  outline-offset: 2px;
+}
+
+/* Keyboard navigation */
+.keyboard-nav:focus-within {
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.6);
+}
+
+/* Tooltip styles */
+.tooltip {
+  position: relative;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Loading skeleton */
+@keyframes skeleton {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.skeleton {
+  animation: skeleton 1.5s infinite;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.2),
+    rgba(255, 255, 255, 0.1)
+  );
+  background-size: 200% 100%;
+  animation: loading 2s infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Staggered animation for list items */
+@keyframes staggerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.staggered-item {
+  animation: staggerFadeIn 0.4s ease-out forwards;
+}
+
+.staggered-item:nth-child(1) { animation-delay: 0s; }
+.staggered-item:nth-child(2) { animation-delay: 0.1s; }
+.staggered-item:nth-child(3) { animation-delay: 0.2s; }
+.staggered-item:nth-child(4) { animation-delay: 0.3s; }
+.staggered-item:nth-child(5) { animation-delay: 0.4s; }
+
+/* Backdrop blur support check */
+@supports (backdrop-filter: blur(10px)) {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+}
+
+/* CSS Grid for responsive layouts */
+@media (min-width: 1200px) {
+  .responsive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+}
+
+@media (max-width: 768px) {
+  .responsive-grid {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Flexbox utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-gap {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Text utilities */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Utility classes */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
