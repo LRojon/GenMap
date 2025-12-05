@@ -2,33 +2,48 @@ import React, { useEffect, useRef, useState } from 'react';
 import './MapCanvas.css';
 import { getColorFromHeight, getColorFromClimate, getColorFromBiome, getColorFromRiver } from '../utils/colorPalette';
 import { Map } from '../utils/map';
-import CitiesOverlay from './CitiesOverlay';
+import CitiesPanel from './CitiesPanel';
 
-const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover }) => {
+const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover }) => {
     const canvasRef = useRef(null);
     const climateCanvasRef = useRef(null);
     const biomeCanvasRef = useRef(null);
     const riverCanvasRef = useRef(null);
     const biomeMapRef = useRef(null);
+    const generationAbortRef = useRef(null);
     const [progress, setProgress] = useState(0);
     const [mapCities, setMapCities] = useState(null);
 
     useEffect(() => {
+        // Créer un AbortController pour pouvoir annuler la génération
+        const abortController = new AbortController();
+        generationAbortRef.current = abortController;
+
+        console.log('MapCanvas: useEffect triggered - seed:', config.seed);
+
         const generateMap = async () => {
+            console.log('MapCanvas: generateMap started - seed:', config.seed);
             const canvas = canvasRef.current;
             const climateCanvas = climateCanvasRef.current;
             const biomeCanvas = biomeCanvasRef.current;
             const riverCanvas = riverCanvasRef.current;
-            if (!canvas || !climateCanvas || !biomeCanvas || !riverCanvas) return;
+            if (!canvas || !climateCanvas || !biomeCanvas || !riverCanvas) {
+                console.log('MapCanvas: Canvas refs not ready');
+                return;
+            }
 
-            console.log('MapCanvas: Starting generation for seed:', config.seed);
             const startTime = performance.now();
 
             try {
-                const ctx = canvas.getContext('2d');
-                const climateCtx = climateCanvas.getContext('2d');
-                const biomeCtx = biomeCanvas.getContext('2d');
-                const riverCtx = riverCanvas.getContext('2d');
+                const ctx = canvas.getContext('2d', { willReadFrequently: false });
+                const climateCtx = climateCanvas.getContext('2d', { willReadFrequently: false });
+                const biomeCtx = biomeCanvas.getContext('2d', { willReadFrequently: false });
+                const riverCtx = riverCanvas.getContext('2d', { willReadFrequently: false });
+
+                if (abortController.signal.aborted) {
+                    console.log('MapCanvas: Aborted before setup');
+                    return;
+                }
 
                 canvas.width = config.width;
                 canvas.height = config.height;
@@ -42,8 +57,14 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
                 setProgress(10);
 
                 // Générer la carte
+                console.log('MapCanvas: Starting generation...');
                 const mapInstance = new Map();
                 mapInstance.generate(config.width, config.height, config.seed);
+
+                if (abortController.signal.aborted) {
+                    console.log('MapCanvas: Aborted after generation');
+                    return;
+                }
 
                 setProgress(50);
 
@@ -51,6 +72,11 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
                 const climateMap1D = mapInstance.getClimateMap1D();
                 const biomeMap1D = mapInstance.getBiomeMap1D();
                 const riverMap1D = mapInstance.getRiverMap1D();
+
+                if (abortController.signal.aborted) {
+                    console.log('MapCanvas: Aborted after map conversion');
+                    return;
+                }
 
                 setProgress(75);
 
@@ -69,6 +95,8 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
 
                 ctx.putImageData(heightImageData, 0, 0);
 
+                if (abortController.signal.aborted) return;
+
                 // Dessiner climat
                 const climateImageData = climateCtx.createImageData(config.width, config.height);
                 const climateData = climateImageData.data;
@@ -84,6 +112,8 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
 
                 climateCtx.putImageData(climateImageData, 0, 0);
 
+                if (abortController.signal.aborted) return;
+
                 // Dessiner biomes
                 const biomeImageData = biomeCtx.createImageData(config.width, config.height);
                 const biomeData = biomeImageData.data;
@@ -98,6 +128,8 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
                 }
 
                 biomeCtx.putImageData(biomeImageData, 0, 0);
+
+                if (abortController.signal.aborted) return;
 
                 // Dessiner rivières (sur canvas transparent)
                 if (riverMap1D) {
@@ -119,6 +151,8 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
                     riverCtx.putImageData(riverImageData, 0, 0);
                 }
 
+                if (abortController.signal.aborted) return;
+
                 // Stocker la biome map pour la détection du hover
                 biomeMapRef.current = biomeMap1D;
 
@@ -136,14 +170,22 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
                     cities: mapInstance.cities,
                 });
             } catch (error) {
-                console.error('Error generating map:', error);
-                setProgress(0);
-                onMapGenerated({});
+                if (!abortController.signal.aborted) {
+                    console.error('Error generating map:', error);
+                    setProgress(0);
+                    onMapGenerated({});
+                }
             }
         };
 
         generateMap();
-    }, [config, onMapGenerated]);
+
+        // Cleanup: annuler la génération si le composant est unmounté ou config change
+        return () => {
+            console.log('MapCanvas: useEffect cleanup - aborting generation');
+            abortController.abort();
+        };
+    }, [config.seed, config.width, config.height, generationId, onMapGenerated]);
 
     const handleBiomeCanvasMouseMove = (e) => {
         if (!biomeMapRef.current || !onBiomeHover) return;
@@ -212,7 +254,7 @@ const MapCanvas = ({ config, onMapGenerated, isGenerating, activeTab, climateOpa
                 }}
             />
             {mapCities && (
-                <CitiesOverlay 
+                <CitiesPanel 
                     cities={mapCities} 
                     config={config} 
                     activeTab={activeTab}

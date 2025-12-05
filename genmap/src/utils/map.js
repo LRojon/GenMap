@@ -1,6 +1,7 @@
 import { generatePerlinNoise } from './perlin';
 import { getNextSeed } from './seedGenerator';
 import { CityPlacer } from './cities';
+import { SEA_LEVEL } from './constants';
 
 export class Map {
   constructor() {
@@ -9,10 +10,22 @@ export class Map {
     this.biomeMap = null;
     this.riverMap = null;
     this.cities = null;
+    // Cache pour les conversions 1D
+    this._heightMap1D = null;
+    this._climateMap1D = null;
+    this._biomeMap1D = null;
   }
 
+  // Nettoyer les caches lors de la génération d'une nouvelle carte
+  _clearCache() {
+    this._heightMap1D = null;
+    this._climateMap1D = null;
+    this._biomeMap1D = null;
+  }
 
   generate(width, height, seed, maskStrength = 1.5) {
+    // Nettoyer les caches avant nouvelle génération
+    this._clearCache();
     // Nettoyer la console
     console.clear();
     
@@ -131,6 +144,11 @@ export class Map {
       return null;
     }
 
+    // Retourner du cache si disponible
+    if (this._heightMap1D) {
+      return this._heightMap1D;
+    }
+
     const width = this.heightMap[0].length;
     const height = this.heightMap.length;
     const result = new Uint8Array(width * height);
@@ -141,6 +159,8 @@ export class Map {
       }
     }
 
+    // Stocker en cache
+    this._heightMap1D = result;
     return result;
   }
 
@@ -171,6 +191,11 @@ export class Map {
       return null;
     }
 
+    // Retourner du cache si disponible
+    if (this._climateMap1D) {
+      return this._climateMap1D;
+    }
+
     const width = this.climateMap[0].length;
     const height = this.climateMap.length;
     const result = new Uint8Array(width * height);
@@ -181,6 +206,8 @@ export class Map {
       }
     }
 
+    // Stocker en cache
+    this._climateMap1D = result;
     return result;
   }
 
@@ -189,7 +216,6 @@ export class Map {
       throw new Error('heightMap and climateMap must be generated first');
     }
 
-    const SEA_LEVEL = 127;
     this.biomeMap = new Array(height);
 
     for (let y = 0; y < height; y++) {
@@ -257,6 +283,11 @@ export class Map {
       return null;
     }
 
+    // Retourner du cache si disponible
+    if (this._biomeMap1D) {
+      return this._biomeMap1D;
+    }
+
     const width = this.biomeMap[0].length;
     const height = this.biomeMap.length;
     const result = new Uint8Array(width * height);
@@ -267,6 +298,8 @@ export class Map {
       }
     }
 
+    // Stocker en cache
+    this._biomeMap1D = result;
     return result;
   }
 
@@ -317,7 +350,6 @@ export class Map {
     const river = [start];
     const visited = new Set([`${start.x},${start.y}`]);
     let current = start;
-    const SEA_LEVEL = 127;
     const MAX_ITERATIONS = (width + height) * 5;
     let iterations = 0;
     let pseudoRandom = seed; // Seed pseudo-aléatoire
@@ -382,7 +414,6 @@ export class Map {
      * Applique l'érosion de la rivière à la heightMap
      * Réduit l'altitude le long du chemin de la rivière
      */
-    const SEA_LEVEL = 127;
     const RIVER_WIDTH = 0;
     
     for (const point of river) {

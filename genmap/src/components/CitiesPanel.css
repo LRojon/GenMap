@@ -1,0 +1,66 @@
+/* Cities Panel Overlay */
+.cities-panel {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.city-info-panel {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.9);
+  border: 2px solid #FFD700;
+  border-radius: 8px;
+  padding: 15px;
+  color: #FFFFFF;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  max-width: 250px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.8);
+  z-index: 10;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.city-info-title {
+  font-weight: bold;
+  font-size: 14px;
+  color: #FFD700;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.city-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.city-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.city-info-row .label {
+  color: #FFD700;
+  font-weight: bold;
+  min-width: 80px;
+}
+
+.city-info-row .value {
+  color: #FFFFFF;
+  text-align: right;
+}

@@ -26,6 +26,7 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [climateOpacity, setClimateOpacity] = useState(70);
   const [hoveredBiomeId, setHoveredBiomeId] = useState(null);
+  const [generationId, setGenerationId] = useState(0); // Identifiant unique pour forcer les générations
 
   const tabs = [
     { id: 'generation', name: 'Generation', icon: '⚡' },
@@ -39,21 +40,14 @@ function App() {
   ];
 
   const handleGenerateMap = useCallback((config) => {
+    console.log('App: handleGenerateMap called with seed:', config.seed);
     setIsGenerating(true);
     setMapConfig(config);
-
-    // Débloquer automatiquement après 5 minutes si la génération prend trop longtemps
-    const timeoutId = setTimeout(() => {
-      console.warn('Map generation timeout - resetting state');
-      setIsGenerating(false);
-    }, 300000); // 5 minutes
-
-    return () => clearTimeout(timeoutId); // Cleanup
+    setGenerationId(prev => prev + 1); // Force une génération même si le seed est identique
   }, []);
 
-  const handleMapGenerated = useCallback((data) => {
-    // Carte générée, données disponibles dans 'data'
-    console.log('Map generated:', data);
+  const handleMapGenerated = useCallback(() => {
+    console.log('App: handleMapGenerated called');
     setIsGenerating(false);
   }, []);
 
@@ -98,7 +92,8 @@ function App() {
         
         <div className="right-panel">
           <MapCanvas 
-            config={mapConfig} 
+            config={mapConfig}
+            generationId={generationId}
             onMapGenerated={handleMapGenerated}
             isGenerating={isGenerating}
             activeTab={activeTab}

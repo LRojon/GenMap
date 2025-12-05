@@ -1,7 +1,7 @@
 import { getNextSeed } from './seedGenerator.js';
+import { SEA_LEVEL } from './constants.js';
 
 // Constantes
-const SEA_LEVEL = 100;
 const BIOME_TYPES = {
   WATER: 0,
   BEACH: 1,
@@ -227,17 +227,18 @@ export class CityPlacer {
       if (tooClose) continue;
 
       // Créer la ville
-      placedCities.push(selectedPosition);
       const [x, y] = selectedPosition;
       const altitude = this.heightMap[y * this.width + x];
       const climate = this.climateMap ? this.climateMap[y * this.width + x] : 127;
       const biome = this.biomeMap ? this.biomeMap[y * this.width + x] : 0;
 
-      // Debug: vérifier altitude
+      // ===== VÉRIFICATION STRICTE: REJETER SI DANS L'EAU =====
       if (altitude <= SEA_LEVEL) {
-        console.warn(`⚠️ City placed in water at (${x}, ${y}) with altitude ${altitude}`);
+        console.warn(`❌ REJECTED: City in water at (${x}, ${y}) with altitude ${altitude}, score=${selectedScore}`);
+        continue;
       }
 
+      placedCities.push(selectedPosition);
       const cityIndex = this.cities.cities.length;
       const citySeed = getNextSeed(seed, cityIndex);
 
@@ -294,9 +295,11 @@ export class CityPlacer {
 
     console.log(`🌊 Water pixels (key): ${waterCount}, Land pixels (key): ${landCount}`);
 
+    const scoreStep = 5
+
     // Remplir la scoreMap complète (interpolation simple)
-    for (let y = 0; y < this.height; y++) {
-      for (let x = 0; x < this.width; x++) {
+    for (let y = 0; y < this.height; y += scoreStep) {
+      for (let x = 0; x < this.width; x += scoreStep) {
         const idx = y * this.width + x;
         const altitude = this.heightMap[idx];
 
@@ -516,7 +519,14 @@ export class CityPlacer {
       for (let x = 0; x < this.width; x += step) {
         const idx = y * this.width + x;
         
-        // Rejeter les scores négatifs (eau, montagne)
+        // ===== VÉRIFICATION STRICTE: Rejeter l'eau et la montagne =====
+        const altitude = this.heightMap[idx];
+        if (altitude <= SEA_LEVEL || altitude > 180) {
+          scoreDistribution.water++;
+          continue;
+        }
+        
+        // Rejeter les scores négatifs (au cas où)
         if (scoreMap[idx] < 0) {
           scoreDistribution.water++;
           continue;
