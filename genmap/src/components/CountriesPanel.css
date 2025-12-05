@@ -1,0 +1,100 @@
+.countries-panel {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.country-info-panel {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background-color: rgba(0, 0, 0, 0.95);
+  border: 3px solid #FFD700;
+  border-radius: 8px;
+  padding: 0;
+  color: #FFFFFF;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  max-width: 300px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.8);
+  z-index: 10;
+  animation: slideIn 0.2s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.country-info-header {
+  padding: 12px 15px;
+  font-weight: bold;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #000;
+  border-bottom: 2px solid #FFD700;
+}
+
+.country-info-content {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.country-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.3);
+  padding-bottom: 8px;
+}
+
+.country-info-row .label {
+  color: #FFD700;
+  font-weight: bold;
+  min-width: 100px;
+}
+
+.country-info-row .value {
+  color: #FFFFFF;
+  text-align: right;
+  flex: 1;
+}
+
+.country-cities-list {
+  margin-top: 12px;
+  border-top: 2px solid #FFD700;
+  padding-top: 12px;
+}
+
+.cities-title {
+  color: #FFD700;
+  font-weight: bold;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.city-item {
+  color: #FFFFFF;
+  padding: 4px 8px;
+  background-color: rgba(255, 215, 0, 0.1);
+  border-radius: 3px;
+  margin-bottom: 4px;
+  border-left: 2px solid #FFD700;
+  font-size: 11px;
+}
+
+.city-item:last-child {
+  margin-bottom: 0;
+}

@@ -1,6 +1,7 @@
 import { generatePerlinNoise } from './perlin';
 import { getNextSeed } from './seedGenerator';
 import { CityPlacer } from './cities';
+import { CountryGenerator } from './countries';
 import { SEA_LEVEL } from './constants';
 
 export class Map {
@@ -10,6 +11,7 @@ export class Map {
     this.biomeMap = null;
     this.riverMap = null;
     this.cities = null;
+    this.countries = null;
     // Cache pour les conversions 1D
     this._heightMap1D = null;
     this._climateMap1D = null;
@@ -72,6 +74,12 @@ export class Map {
     this.genCities(width, height, getNextSeed(seed, 4));
     stepTime = performance.now() - stepStartTime;
     console.log(`%c⏱ Cities: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
+
+    // Étape 7: Countries
+    stepStartTime = performance.now();
+    this.genCountries(width, height, getNextSeed(seed, 5));
+    stepTime = performance.now() - stepStartTime;
+    console.log(`%c⏱ Countries: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
 
     // Temps total
     const globalTime = performance.now() - globalStartTime;
@@ -483,6 +491,31 @@ export class Map {
 
     // Placer les villes
     this.cities = cityPlacer.placeCities(numCities, seed);
+  }
+
+  genCountries(width, height, seed) {
+    if (!this.cities || !this.cities.cities || this.cities.cities.length === 0) {
+      console.warn('⚠️ No cities to generate countries from');
+      return;
+    }
+
+    // Convertir les maps 2D en 1D
+    const heightMap1D = this.getHeightMap1D();
+    const climateMap1D = this.getClimateMap1D();
+    const biomeMap1D = this.getBiomeMap1D();
+
+    // Créer le générateur de pays
+    const countryGenerator = new CountryGenerator(
+      heightMap1D,
+      climateMap1D,
+      biomeMap1D,
+      this.cities,
+      width,
+      height
+    );
+
+    // Générer les pays
+    this.countries = countryGenerator.generateCountries(seed);
   }
 }
 

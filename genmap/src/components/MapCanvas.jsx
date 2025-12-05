@@ -3,6 +3,7 @@ import './MapCanvas.css';
 import { getColorFromHeight, getColorFromClimate, getColorFromBiome, getColorFromRiver } from '../utils/colorPalette';
 import { Map } from '../utils/map';
 import CitiesPanel from './CitiesPanel';
+import CountriesPanel from './CountriesPanel';
 
 const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover }) => {
     const canvasRef = useRef(null);
@@ -13,6 +14,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
     const generationAbortRef = useRef(null);
     const [progress, setProgress] = useState(0);
     const [mapCities, setMapCities] = useState(null);
+    const [mapCountries, setMapCountries] = useState(null);
 
     useEffect(() => {
         // Créer un AbortController pour pouvoir annuler la génération
@@ -156,8 +158,9 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 // Stocker la biome map pour la détection du hover
                 biomeMapRef.current = biomeMap1D;
 
-                // Stocker les cities
+                // Stocker les cities et countries
                 setMapCities(mapInstance.cities);
+                setMapCountries(mapInstance.countries);
 
                 setProgress(100);
                 const endTime = performance.now();
@@ -168,6 +171,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     climateMap: climateMap1D,
                     biomeMap: biomeMap1D,
                     cities: mapInstance.cities,
+                    countries: mapInstance.countries,
                 });
             } catch (error) {
                 if (!abortController.signal.aborted) {
@@ -256,6 +260,14 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
             {mapCities && (
                 <CitiesPanel 
                     cities={mapCities} 
+                    config={config} 
+                    activeTab={activeTab}
+                    scale={config.scale}
+                />
+            )}
+            {mapCountries && (
+                <CountriesPanel 
+                    countries={mapCountries} 
                     config={config} 
                     activeTab={activeTab}
                     scale={config.scale}
