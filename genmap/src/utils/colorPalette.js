@@ -125,3 +125,59 @@ export function getColorStringFromClimate(climateValue) {
   const rgb = getColorFromClimate(climateValue);
   return rgbToString(rgb);
 }
+
+/**
+ * Obtient la couleur du biome basée sur l'ID (0-11)
+ * 0 = Eau, 1 = Plage, 2 = Plaine, 3 = Forêt, 4 = Prairie
+ * 5 = Désert, 6 = Collines, 7 = Montagne, 8 = Pics/Neige
+ * 9 = Jungle, 10 = Marécage, 11 = Toundra
+ * @param {number} biomeId - L'ID du biome (0-11)
+ * @returns {Array} [r, g, b]
+ */
+export function getColorFromBiome(biomeId) {
+  const BIOME_COLORS = {
+    0: [30, 100, 200],      // Eau (bleu foncé)
+    1: [238, 214, 175],     // Plage/Côte (sable)
+    2: [144, 238, 144],     // Plaine (vert clair)
+    3: [34, 139, 34],       // Forêt tempérée (vert foncé)
+    4: [210, 180, 140],     // Prairie (beige)
+    5: [255, 215, 0],       // Désert (or)
+    6: [128, 128, 64],      // Collines (olive)
+    7: [169, 169, 169],     // Montagne (gris)
+    8: [255, 255, 255],     // Pics/Neige (blanc)
+    9: [0, 100, 0],         // Jungle (vert très foncé)
+    10: [144, 200, 160],    // Marécage (cyan-vert)
+    11: [200, 220, 200],    // Toundra (gris-vert pâle)
+  };
+
+  return BIOME_COLORS[biomeId] || BIOME_COLORS[0];
+}
+
+/**
+ * Obtient la couleur CSS pour un biome donné
+ * @param {number} biomeId - L'ID du biome (0-10)
+ * @returns {string} Chaîne CSS rgb(r, g, b)
+ */
+export function getColorStringFromBiome(biomeId) {
+  const rgb = getColorFromBiome(biomeId);
+  return rgbToString(rgb);
+}
+
+/**
+ * Obtient la couleur pour une rivière/eau peu profonde
+ * @returns {Array} [r, g, b] - Couleur de rivière
+ */
+export function getColorFromRiver() {
+  // Eau peu profonde - couleur à altitude ~120
+  return COLOR_PALETTE[120] || [50, 120, 200];
+}
+
+/**
+ * Obtient la couleur CSS pour une rivière
+ * @returns {string} Chaîne CSS rgb(r, g, b)
+ */
+export function getColorStringFromRiver() {
+  const rgb = getColorFromRiver();
+  return rgbToString(rgb);
+}
+

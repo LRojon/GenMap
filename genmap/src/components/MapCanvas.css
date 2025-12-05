@@ -16,9 +16,25 @@
   image-rendering: crisp-edges;
 }
 
-.climate-overlay {
+.map-canvas:first-of-type {
+  position: relative;
+  z-index: 1;
+}
+
+.climate-overlay,
+.biome-overlay,
+.river-overlay {
   position: absolute;
+  top: 50%;
+  left: 50%;
   pointer-events: none;
+  z-index: 2;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transition: opacity 0.3s ease;
 }
 
 .progress-bar {
@@ -30,6 +46,7 @@
   background: rgba(255, 255, 255, 0.2);
   border-radius: 2px;
   overflow: hidden;
+  z-index: 10;
 }
 
 .progress-fill {

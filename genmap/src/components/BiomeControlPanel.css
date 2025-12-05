@@ -1,0 +1,66 @@
+.biome-panel {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.biome-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.biome-section h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #667eea;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.biome-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.biome-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+.biome-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateX(4px);
+}
+
+.biome-item.hovered {
+  background: rgba(102, 126, 234, 0.3);
+  border-color: rgba(102, 126, 234, 0.8);
+  transform: translateX(4px);
+  box-shadow: 0 0 12px rgba(102, 126, 234, 0.4);
+}
+
+.biome-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.biome-name {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 500;
+}

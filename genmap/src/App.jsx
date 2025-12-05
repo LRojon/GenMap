@@ -3,6 +3,7 @@ import './App.css';
 import MapCanvas from './components/MapCanvas';
 import ControlPanel from './components/ControlPanel';
 import ClimateControlPanel from './components/ClimateControlPanel';
+import BiomeControlPanel from './components/BiomeControlPanel';
 
 function getInitialMapConfig() {
   return {
@@ -23,12 +24,11 @@ function App() {
   const [activeTab, setActiveTab] = useState('generation');
   const [mapConfig, setMapConfig] = useState(getInitialMapConfig());
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationTimeoutId, setGenerationTimeoutId] = useState(null);
   const [climateOpacity, setClimateOpacity] = useState(70);
+  const [hoveredBiomeId, setHoveredBiomeId] = useState(null);
 
   const tabs = [
     { id: 'generation', name: 'Generation', icon: '⚡' },
-    { id: 'map', name: 'Map', icon: '🗺' },
     { id: 'countries', name: 'Countries', icon: '🏛' },
     { id: 'cities', name: 'Cities', icon: '🏙' },
     { id: 'routes', name: 'Routes', icon: '🛣' },
@@ -39,36 +39,23 @@ function App() {
   ];
 
   const handleGenerateMap = useCallback((config) => {
-    // Annuler les timeouts précédents
-    if (generationTimeoutId) {
-      clearTimeout(generationTimeoutId);
-    }
-
     setIsGenerating(true);
     setMapConfig(config);
 
-    // Débloquer automatiquement après 60 secondes si la génération prend trop longtemps
+    // Débloquer automatiquement après 5 minutes si la génération prend trop longtemps
     const timeoutId = setTimeout(() => {
       console.warn('Map generation timeout - resetting state');
       setIsGenerating(false);
-      setGenerationTimeoutId(null);
-    }, 60000);
+    }, 300000); // 5 minutes
 
-    setGenerationTimeoutId(timeoutId);
-  }, [generationTimeoutId]);
+    return () => clearTimeout(timeoutId); // Cleanup
+  }, []);
 
   const handleMapGenerated = useCallback((data) => {
     // Carte générée, données disponibles dans 'data'
     console.log('Map generated:', data);
-    
-    // Annuler le timeout
-    if (generationTimeoutId) {
-      clearTimeout(generationTimeoutId);
-      setGenerationTimeoutId(null);
-    }
-    
     setIsGenerating(false);
-  }, [generationTimeoutId]);
+  }, []);
 
   return (
     <div className="App">
@@ -102,6 +89,11 @@ function App() {
               onOpacityChange={setClimateOpacity}
             />
           )}
+          {activeTab === 'biomes' && (
+            <BiomeControlPanel 
+              hoveredBiomeId={hoveredBiomeId}
+            />
+          )}
         </div>
         
         <div className="right-panel">
@@ -111,6 +103,7 @@ function App() {
             isGenerating={isGenerating}
             activeTab={activeTab}
             climateOpacity={climateOpacity}
+            onBiomeHover={setHoveredBiomeId}
           />
         </div>
       </div>
