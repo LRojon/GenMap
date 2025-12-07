@@ -1,4 +1,10 @@
 .countries-overlay {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.countries-overlay:hover {
+  opacity: 0.9 !important;
 }

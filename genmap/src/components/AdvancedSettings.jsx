@@ -29,8 +29,7 @@ const AdvancedSettings = ({ config, onConfigChange, onClose }) => {
 
   const handleApply = () => {
     // Les modifications seraient appliquées au contexte de configuration
-    console.log('Perlin:', perlinSettings);
-    console.log('Biomes:', biomeThresholds);
+
     onClose();
   };
 

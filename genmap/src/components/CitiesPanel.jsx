@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './CitiesPanel.css';
 
-const CitiesPanel = ({ cities, config, activeTab, scale = 1 }) => {
+const CitiesPanel = ({ cities, config, activeTab, scale = 1, onCityHover }) => {
   const canvasRef = useRef(null);
   const [hoveredCity, setHoveredCity] = useState(null);
 
@@ -55,7 +55,7 @@ const CitiesPanel = ({ cities, config, activeTab, scale = 1 }) => {
         
         // Debug: log les villes avec score très bas
         if (city.score < 30) {
-          console.log(`⚠️ Low score city at (${x}, ${y}): score=${city.score}, altitude=${city.altitude}, biome=${city.biome}`);
+
         }
       }
 
@@ -74,10 +74,10 @@ const CitiesPanel = ({ cities, config, activeTab, scale = 1 }) => {
     });
   }, [cities, config, hoveredCity, activeTab]);
 
-  const handleMouseMove = (e) => {
+  const handleClick = (e) => {
     if (!canvasRef.current || !cities || !cities.cities) return;
 
-    // En mode "generation", pas de hover
+    // En mode "generation", pas de click
     if (activeTab === 'generation') {
       return;
     }
@@ -107,65 +107,33 @@ const CitiesPanel = ({ cities, config, activeTab, scale = 1 }) => {
       }
     });
 
-    setHoveredCity(closestCity);
+    // Toggle: si on clique sur la même ville, la désélectionner
+    setHoveredCity(closestCity === hoveredCity ? null : closestCity);
   };
 
-  const handleMouseLeave = () => {
-    setHoveredCity(null);
-  };
-
-  // Récupérer les infos de la ville survolée
-  const hoveredCityData = hoveredCity !== null ? cities.cities[hoveredCity] : null;
-
-  return (
-    <>
-      <canvas
-        ref={canvasRef}
-        className="map-canvas cities-panel"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          position: 'absolute',
-          left: '50%',
-          top: '50%',
-          transform: `translate(-50%, -50%) scale(${scale})`,
-          transformOrigin: 'center',
-          opacity: activeTab === 'generation' || activeTab === 'cities' ? 0.9 : 0,
-          pointerEvents: activeTab === 'generation' || activeTab === 'cities' ? 'auto' : 'none',
-          cursor: activeTab === 'cities' ? 'pointer' : 'default',
-          zIndex: 3,
-        }}
-      />
-      
-      {/* Panneau d'info au hover en mode cities */}
-      {activeTab === 'cities' && hoveredCityData && (
-        <div className="city-info-panel">
-          <div className="city-info-title">{hoveredCityData.name}</div>
-          <div className="city-info-content">
-            <div className="city-info-row">
-              <span className="label">Score:</span>
-              <span className="value">{Math.round(hoveredCityData.score)}</span>
-            </div>
-            <div className="city-info-row">
-              <span className="label">Type:</span>
-              <span className="value">{hoveredCityData.cityType}</span>
-            </div>
-            <div className="city-info-row">
-              <span className="label">Population:</span>
-              <span className="value">{Math.round(hoveredCityData.population).toLocaleString()}</span>
-            </div>
-            <div className="city-info-row">
-              <span className="label">Position:</span>
-              <span className="value">({hoveredCityData.position[0]}, {hoveredCityData.position[1]})</span>
-            </div>
-            <div className="city-info-row">
-              <span className="label">Altitude:</span>
-              <span className="value">{hoveredCityData.altitude}</span>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    // Notifier le parent de la ville survolée
+  useEffect(() => {
+    if (onCityHover) {
+      const city = hoveredCity !== null ? cities.cities[hoveredCity] : null;
+      onCityHover(city);
+    }
+  }, [hoveredCity, cities, onCityHover]);  return (
+    <canvas
+      ref={canvasRef}
+      className="map-canvas cities-panel"
+      onClick={handleClick}
+      style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transformOrigin: 'center',
+        opacity: activeTab === 'generation' || activeTab === 'cities' ? 0.9 : 0,
+        pointerEvents: activeTab === 'generation' || activeTab === 'cities' ? 'auto' : 'none',
+        cursor: activeTab === 'cities' ? 'pointer' : 'default',
+        zIndex: 3,
+      }}
+    />
   );
 };
 

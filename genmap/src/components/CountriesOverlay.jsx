@@ -24,11 +24,13 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
     const pixelToCountry = new Uint32Array(config.width * config.height);
     pixelToCountry.fill(0xFFFFFFFF); // -1 en unsigned
 
-    // Dessiner les pays
+    // Créer une seule imageData pour tous les pixels
+    const imageData = ctx.createImageData(config.width, config.height);
+    const data = imageData.data;
+
+    // Remplir d'abord les pixels des pays
     for (let countryId = 0; countryId < countries.length; countryId++) {
       const country = countries[countryId];
-      const imageData = ctx.createImageData(config.width, config.height);
-      const data = imageData.data;
 
       // Convertir color HSL à RGB
       const rgb = this._hslToRgb(country.color);
@@ -42,14 +44,136 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
         data[idx + 2] = rgb[2];
         data[idx + 3] = 150; // Semi-transparent
       }
-
-      ctx.putImageData(imageData, 0, 0);
     }
 
     // Stocker la map pour détection
     countriesMapRef.current = pixelToCountry;
 
-    console.log(`🎨 Countries overlay rendered: ${countries.length} countries`);
+    // Maintenant dessiner les frontières par-dessus
+    // Première passe: identifier les pixels de bordure
+    const borderPixels = new Set();
+    
+    for (let y = 0; y < config.height; y++) {
+      for (let x = 0; x < config.width; x++) {
+        const pixelIdx = y * config.width + x;
+        const currentCountry = pixelToCountry[pixelIdx];
+
+        // Ignorer les pixels non assignés (eau)
+        if (currentCountry === 0xFFFFFFFF) continue;
+
+        // Vérifier les 8 voisins (toutes les directions)
+        const neighbors = [
+          [x + 1, y],
+          [x - 1, y],
+          [x, y + 1],
+          [x, y - 1],
+          [x + 1, y + 1],
+          [x - 1, y - 1],
+          [x + 1, y - 1],
+          [x - 1, y + 1],
+        ];
+
+        let isBorder = false;
+        for (const [nx, ny] of neighbors) {
+          // Ignorer les limites de map
+          if (nx < 0 || nx >= config.width || ny < 0 || ny >= config.height) {
+            continue;
+          }
+          
+          const neighborIdx = ny * config.width + nx;
+          const neighborCountry = pixelToCountry[neighborIdx];
+
+          // Si le voisin appartient à un pays DIFFÉRENT (et n'est pas de l'eau), c'est une frontière
+          if (neighborCountry !== currentCountry && neighborCountry !== 0xFFFFFFFF) {
+            isBorder = true;
+            break;
+          }
+        }
+
+        if (isBorder) {
+          borderPixels.add(pixelIdx);
+        }
+      }
+    }
+
+    // Deuxième passe: épaissir les frontières (2-3px)
+    const thickBorders = new Set(borderPixels);
+    for (const borderPixelIdx of borderPixels) {
+      const x = borderPixelIdx % config.width;
+      const y = Math.floor(borderPixelIdx / config.width);
+
+      // Ajouter les voisins immédiats (épaisseur ~2px)
+      const thickNeighbors = [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+        [x + 1, y + 1],
+        [x - 1, y - 1],
+        [x + 1, y - 1],
+        [x - 1, y + 1],
+      ];
+
+      for (const [nx, ny] of thickNeighbors) {
+        if (nx >= 0 && nx < config.width && ny >= 0 && ny < config.height) {
+          thickBorders.add(ny * config.width + nx);
+        }
+      }
+    }
+
+    // Troisième passe: dessiner les frontières épaissies
+    for (const borderPixelIdx of thickBorders) {
+      const currentCountry = pixelToCountry[borderPixelIdx];
+      
+      // Ne pas peindre sur de l'eau
+      if (currentCountry === 0xFFFFFFFF) continue;
+
+      // Utiliser une couleur contrastante (noir) pour les frontières
+      const idx = borderPixelIdx * 4;
+      data[idx] = 0;      // R - noir
+      data[idx + 1] = 0;  // G - noir
+      data[idx + 2] = 0;  // B - noir
+      data[idx + 3] = 255; // Opacité complète
+    }
+
+    // Dessiner tout d'un coup
+    ctx.putImageData(imageData, 0, 0);
+
+    // Dessiner les villes par-dessus
+    for (let countryId = 0; countryId < countries.length; countryId++) {
+      const country = countries[countryId];
+      
+      // Dessiner les villes du pays
+      for (const city of country.cities) {
+        const [cx, cy] = city.position;
+        
+        // La capitale est plus grande
+        const isCapital = city === country.capitalCity;
+        const radius = isCapital ? 5 : 3;
+        const opacity = isCapital ? 1.0 : 0.85;
+        
+        // Cercle blanc semi-transparent
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bordure noire épaisse pour visibilité
+        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Ajouter un point central noir pour les capitales
+        if (isCapital) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+
   }, [countries, config, activeTab]);
 
   const _hslToRgb = (hslString) => {

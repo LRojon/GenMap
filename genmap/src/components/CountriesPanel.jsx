@@ -1,10 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './CountriesPanel.css';
 
-const CountriesPanel = ({ countries, config, activeTab, scale = 1 }) => {
+const CountriesPanel = ({ countries, config, activeTab, scale = 1, onCountryHover }) => {
   const canvasRef = useRef(null);
   const countriesMapRef = useRef(null);
   const [hoveredCountryId, setHoveredCountryId] = useState(null);
+
+  // Notifier le parent du pays survolé
+  useEffect(() => {
+    if (onCountryHover) {
+      const country = hoveredCountryId !== null ? countries[hoveredCountryId] : null;
+      onCountryHover(country);
+    }
+  }, [hoveredCountryId, countries, onCountryHover]);
 
   useEffect(() => {
     if (!canvasRef.current || !countries || countries.length === 0) {
@@ -41,15 +49,43 @@ const CountriesPanel = ({ countries, config, activeTab, scale = 1 }) => {
 
     countriesMapRef.current = pixelToCountry;
 
-    console.log(`🎨 Countries panel rendered: ${countries.length} countries`);
+    // Dessiner les villes par-dessus les pays
+    for (let countryId = 0; countryId < countries.length; countryId++) {
+      const country = countries[countryId];
+      
+      for (const city of country.cities) {
+        const [cx, cy] = city.position;
+        
+        // La capitale est plus grande
+        const isCapital = city === country.capitalCity;
+        const radius = isCapital ? 5 : 3;
+        const opacity = isCapital ? 1.0 : 0.85;
+        
+        // Cercle blanc semi-transparent
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Bordure noire épaisse pour visibilité
+        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        
+        // Ajouter un point central noir pour les capitales
+        if (isCapital) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
   }, [countries, config, activeTab]);
 
-  const handleMouseMove = (e) => {
+  const handleClick = (e) => {
     if (!canvasRef.current || !countries || countries.length === 0) return;
-
-    if (activeTab !== 'countries') {
-      return;
-    }
 
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
@@ -65,15 +101,12 @@ const CountriesPanel = ({ countries, config, activeTab, scale = 1 }) => {
       const countryId = countriesMapRef.current[pixelIdx];
 
       if (countryId !== 0xFFFFFFFF && countryId < countries.length) {
-        setHoveredCountryId(countryId);
+        // Toggle: si on clique sur le même pays, le désélectionner
+        setHoveredCountryId(countryId === hoveredCountryId ? null : countryId);
       } else {
         setHoveredCountryId(null);
       }
     }
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredCountryId(null);
   };
 
   const hoveredCountry = hoveredCountryId !== null ? countries[hoveredCountryId] : null;
@@ -83,8 +116,7 @@ const CountriesPanel = ({ countries, config, activeTab, scale = 1 }) => {
       <canvas
         ref={canvasRef}
         className="map-canvas countries-panel"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
         style={{
           position: 'absolute',
           left: '50%',
@@ -97,53 +129,6 @@ const CountriesPanel = ({ countries, config, activeTab, scale = 1 }) => {
           zIndex: 2,
         }}
       />
-
-      {activeTab === 'countries' && hoveredCountry && (
-        <div className="country-info-panel">
-          <div
-            className="country-info-header"
-            style={{ backgroundColor: hoveredCountry.color }}
-          >
-            {hoveredCountry.name}
-          </div>
-          <div className="country-info-content">
-            <div className="country-info-row">
-              <span className="label">Capital:</span>
-              <span className="value">{hoveredCountry.capitalCity.name}</span>
-            </div>
-            <div className="country-info-row">
-              <span className="label">Population:</span>
-              <span className="value">{Math.round(hoveredCountry.population).toLocaleString()}</span>
-            </div>
-            <div className="country-info-row">
-              <span className="label">Area:</span>
-              <span className="value">{hoveredCountry.area.toLocaleString()} px²</span>
-            </div>
-            <div className="country-info-row">
-              <span className="label">Cities:</span>
-              <span className="value">{hoveredCountry.cities.length}</span>
-            </div>
-            <div className="country-info-row">
-              <span className="label">Main Biome:</span>
-              <span className="value">Biome #{hoveredCountry.mainBiome}</span>
-            </div>
-            <div className="country-info-row">
-              <span className="label">Climate:</span>
-              <span className="value">{hoveredCountry.mainClimate}</span>
-            </div>
-            {hoveredCountry.cities.length > 0 && (
-              <div className="country-cities-list">
-                <div className="cities-title">Cities:</div>
-                {hoveredCountry.cities.map((city, idx) => (
-                  <div key={idx} className="city-item">
-                    {city.name} {hoveredCountry.capitalCity === city ? '👑' : ''}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </>
   );
 };

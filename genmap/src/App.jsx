@@ -4,6 +4,8 @@ import MapCanvas from './components/MapCanvas';
 import ControlPanel from './components/ControlPanel';
 import ClimateControlPanel from './components/ClimateControlPanel';
 import BiomeControlPanel from './components/BiomeControlPanel';
+import CountriesDetailsPanel from './components/CountriesDetailsPanel';
+import CitiesDetailsPanel from './components/CitiesDetailsPanel';
 
 function getInitialMapConfig() {
   return {
@@ -26,6 +28,8 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [climateOpacity, setClimateOpacity] = useState(70);
   const [hoveredBiomeId, setHoveredBiomeId] = useState(null);
+  const [hoveredCountry, setHoveredCountry] = useState(null);
+  const [hoveredCity, setHoveredCity] = useState(null);
   const [generationId, setGenerationId] = useState(0); // Identifiant unique pour forcer les générations
 
   const tabs = [
@@ -40,14 +44,14 @@ function App() {
   ];
 
   const handleGenerateMap = useCallback((config) => {
-    console.log('App: handleGenerateMap called with seed:', config.seed);
+
     setIsGenerating(true);
     setMapConfig(config);
     setGenerationId(prev => prev + 1); // Force une génération même si le seed est identique
   }, []);
 
   const handleMapGenerated = useCallback(() => {
-    console.log('App: handleMapGenerated called');
+
     setIsGenerating(false);
   }, []);
 
@@ -88,6 +92,16 @@ function App() {
               hoveredBiomeId={hoveredBiomeId}
             />
           )}
+          {activeTab === 'countries' && (
+            <CountriesDetailsPanel 
+              country={hoveredCountry}
+            />
+          )}
+          {activeTab === 'cities' && (
+            <CitiesDetailsPanel 
+              city={hoveredCity}
+            />
+          )}
         </div>
         
         <div className="right-panel">
@@ -99,6 +113,8 @@ function App() {
             activeTab={activeTab}
             climateOpacity={climateOpacity}
             onBiomeHover={setHoveredBiomeId}
+            onCountryHover={setHoveredCountry}
+            onCityHover={setHoveredCity}
           />
         </div>
       </div>
@@ -106,4 +122,4 @@ function App() {
   );
 }
 
-export default App
+export default App;

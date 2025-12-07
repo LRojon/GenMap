@@ -16,7 +16,29 @@ const BIOME_TYPES = {
   SWAMP: 10,
 };
 
-// Générateur de noms procéduratifs
+// RNG avec état - compatible avec l'algorithme Python
+class SeededRandom {
+  constructor(seed) {
+    this.seed = (seed | 0) >>> 0;
+  }
+
+  next() {
+    // Linear Congruential Generator pour la compatibilité
+    this.seed = (this.seed * 1103515245 + 12345) >>> 0;
+    return (this.seed >>> 0) / 0x100000000;
+  }
+
+  randint(a, b) {
+    return a + Math.floor(this.next() * (b - a + 1));
+  }
+
+  choice(array) {
+    const idx = Math.floor(this.next() * array.length);
+    return array[idx];
+  }
+}
+
+// Générateur de noms procéduraux - identique au projet Python
 export class ProcNameGenerator {
   static SYLLABLES = {
     consonants: ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'v', 'w', 'z'],
@@ -24,41 +46,56 @@ export class ProcNameGenerator {
     clusters: ['br', 'ch', 'dr', 'fl', 'gr', 'sh', 'sk', 'sl', 'sp', 'st', 'th', 'tr', 'tw', 'wh'],
   };
 
-  static seededRandom(seed) {
-    // Simple seeded random using XOR shift
-    let x = seed >>> 0;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    return (x >>> 0) / 0x100000000;
-  }
-
   static generateCityName(seed, regionalSeed = 0) {
-    const combinedSeed = seed ^ (regionalSeed * 12345);
-    const prng = (i) => this.seededRandom(combinedSeed + i);
+    // Identique à Python: seed ^ (regional_seed * 12345)
+    const rngSeed = seed ^ (regionalSeed * 12345);
+    const rng = new SeededRandom(rngSeed);
 
-    const numSyllables = 2 + Math.floor(prng(0) * 3); // 2-4 syllabes
+    // Longueur du nom: 2-4 syllabes (identique Python)
+    const numSyllables = rng.randint(2, 4);
     let name = '';
 
     for (let i = 0; i < numSyllables; i++) {
-      // 30% de chance de cluster initial
-      if (prng(i * 2) < 0.3 && i === 0) {
-        const clusterIdx = Math.floor(prng(i * 2 + 1) * this.SYLLABLES.clusters.length);
-        name += this.SYLLABLES.clusters[clusterIdx];
-      } else {
-        const consonantIdx = Math.floor(prng(i * 2) * this.SYLLABLES.consonants.length);
-        name += this.SYLLABLES.consonants[consonantIdx];
+      // 30% de chance de cluster initial (identique Python)
+      if (rng.next() < 0.3 && i === 0) {
+        name += rng.choice(this.SYLLABLES.clusters);
+      } else if (rng.next() < 0.7) {
+        name += rng.choice(this.SYLLABLES.consonants);
       }
 
-      const vowelIdx = Math.floor(prng(i * 2 + 0.5) * this.SYLLABLES.vowels.length);
-      name += this.SYLLABLES.vowels[vowelIdx];
+      name += rng.choice(this.SYLLABLES.vowels);
 
-      // 30% de chance d'ajouter une consonne finale
-      if (prng(i * 3) < 0.3) {
-        const consonantIdx = Math.floor(prng(i * 3 + 0.5) * this.SYLLABLES.consonants.length);
-        name += this.SYLLABLES.consonants[consonantIdx];
+      // 30% de chance d'ajouter une consonne finale (identique Python)
+      if (rng.next() < 0.3) {
+        name += rng.choice(this.SYLLABLES.consonants);
       }
     }
+
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  static generateCountryName(seed) {
+    // Identique à Python: noms de pays 2-3 syllabes + suffixe
+    const rng = new SeededRandom(seed);
+
+    // Longueur du nom: 2-3 syllabes
+    const numSyllables = rng.randint(2, 3);
+    let name = '';
+
+    for (let i = 0; i < numSyllables; i++) {
+      // 40% de chance de cluster initial
+      if (rng.next() < 0.4 && i === 0) {
+        name += rng.choice(this.SYLLABLES.clusters);
+      } else {
+        name += rng.choice(this.SYLLABLES.consonants);
+      }
+
+      name += rng.choice(this.SYLLABLES.vowels);
+    }
+
+    // Ajouter un suffixe de pays (identique Python)
+    const suffixes = ['ia', 'land', 'shire', 'stan', 'kingdom', 'realm'];
+    name += rng.choice(suffixes);
 
     return name.charAt(0).toUpperCase() + name.slice(1);
   }
@@ -73,18 +110,40 @@ export class City {
     this.climate = climate;
     this.biome = biome;
     this.score = 0;
-    this.name = ProcNameGenerator.generateCityName(seed);
+    // Utiliser la position pour enrichir la seed du nom (plus de variété)
+    const regionalSeed = (position[0] * 73856093) ^ (position[1] * 19349663) ^ seed;
+    this.name = ProcNameGenerator.generateCityName(seed, regionalSeed);
     this.population = 0;
     this.cityType = 'village'; // village, town, city, metropolis
+    this.isCapital = false;
+    this.country = null;
+    
+    // Données complètes du Python
+    this.religion = null;
+    this.culture = null;
+    this.government = null;
+    this.foundedYear = 0;
+    this.specialization = null; // agriculture, mining, forestry, fishing, trade
+    this.landmark = null; // Monument ou site touristique
+    this.threatLevel = 'Low'; // Low, Medium, High (bandits, monstres, etc)
+    this.prosperity = 'Stable'; // Struggling, Stable, Thriving
+    
+    this.resources = {
+      agriculture: 0,
+      mining: 0,
+      forestry: 0,
+      fishing: 0,
+      trade: 0
+    };
   }
 
   generateFullData(year = 0) {
-    const seed = this.seed;
-    const prng = (i) => this._seededRandom(seed + i);
+    const rng = new SeededRandom(this.seed);
 
-    // Population basée sur le score
-    const basePop = Math.floor(this.score * 50) + 500;
-    this.population = basePop + Math.floor(prng(0) * basePop * 0.2 - basePop * 0.1);
+    // Population basée sur le score (utiliser valeur absolue pour éviter les populations négatives)
+    const basePop = Math.floor(Math.abs(this.score) * 50) + 500;
+    this.population = basePop + rng.randint(-Math.floor(basePop * 0.1), Math.floor(basePop * 0.1));
+    this.population = Math.max(100, this.population); // Population minimum 100
 
     // Type de ville
     if (this.population < 1000) {
@@ -97,16 +156,174 @@ export class City {
       this.cityType = 'metropolis';
     }
 
-    // Année de fondation
-    this.foundedYear = year - Math.floor(prng(1) * 900 + 100);
+    // Année de fondation (aléatoire dans le passé)
+    this.foundedYear = year - rng.randint(100, 1000);
+
+    // Religion et Culture - générées procéduralement
+    this.religion = this._generateReligionName();
+    this.culture = this._generateCultureName();
+    this.government = rng.choice(['Democratic', 'Aristocratic', 'Theocratic', 'Mercantile']);
+
+    // Générer les infos sympas
+    this._generateSpecialization();
+    this._generateLandmark();
+    this._generateThreatLevel();
+    this._generateProsperity();
+
+    // Ressources basées sur altitude et climat
+    this._generateResources();
   }
 
-  _seededRandom(seed) {
-    let x = seed >>> 0;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    return (x >>> 0) / 0x100000000;
+  _generateReligionName() {
+    const rng = new SeededRandom(this.seed ^ 12345);
+    
+    const templates = [
+      "Le Culte de {}",
+      "Les Enfants de {}",
+      "L'Ordre de {}",
+      "La Foi de {}",
+      "Le Chemin de {}",
+      "Les Gardiens de {}",
+      "La Bénédiction de {}",
+      "Le Temple de {}",
+      "L'Alliance de {}",
+      "La Voie de {}",
+      "Les Disciples de {}",
+      "La Communion de {}"
+    ];
+
+    const deities = [
+      "l'Aube", "la Lune", "l'Étoile du Nord",
+      "la Terre Mère", "l'Esprit Ancien", "le Grand Arbre",
+      "la Flamme Éternelle", "l'Océan Primordial", "les Anciens",
+      "la Lumière", "l'Ombre", "l'Équilibre",
+      "la Mort et la Renaissance", "la Tempête", "les Montagnes",
+      "la Forêt Sacrée", "le Ciel", "le Cristal",
+      "l'Infini", "la Destinée", "l'Harmonie"
+    ];
+
+    const template = rng.choice(templates);
+    const deity = rng.choice(deities);
+    return template.replace('{}', deity);
+  }
+
+  _generateCultureName() {
+    const rng = new SeededRandom(this.seed ^ 54321);
+    
+    const templates = [
+      "Culture {}",
+      "Peuple des {}",
+      "Tradition de {}",
+      "Héritage {}",
+      "Les {} Anciens",
+      "Lignée des {}"
+    ];
+
+    const adjectives = [
+      'Montagnard', 'Côtier', 'Forestier', 'Nomade', 'Urbain', 'Rural',
+      'Guerrier', 'Marchand', 'Érudit', 'Artisan', 'Paysan', 'Noble'
+    ];
+
+    const template = rng.choice(templates);
+    const adjective = rng.choice(adjectives);
+    return template.replace('{}', adjective);
+  }
+
+  _generateResources() {
+    const rng = new SeededRandom(this.seed);
+
+    // Agriculture: bon pour climates modérés et altitudes basses/moyennes
+    if (this.altitude > 100 && this.altitude < 180 && this.climate > 80 && this.climate < 170) {
+      this.resources.agriculture = 70 + rng.randint(-20, 20);
+    } else if (this.altitude > 100 && this.altitude < 200) {
+      this.resources.agriculture = 40 + rng.randint(-20, 20);
+    } else {
+      this.resources.agriculture = 20 + rng.randint(-10, 10);
+    }
+
+    // Mining: bon pour altitudes hautes
+    if (this.altitude > 160) {
+      this.resources.mining = 60 + rng.randint(-20, 20);
+    } else {
+      this.resources.mining = 20 + rng.randint(-15, 15);
+    }
+
+    // Forestry: bon pour climat tempéré/froid
+    if (this.climate > 60 && this.climate < 140) {
+      this.resources.forestry = 65 + rng.randint(-20, 20);
+    } else {
+      this.resources.forestry = 25 + rng.randint(-15, 15);
+    }
+
+    // Fishing: bon pour zones côtières (altitude basse)
+    if (this.altitude < 130) {
+      this.resources.fishing = 55 + rng.randint(-20, 20);
+    } else {
+      this.resources.fishing = 10 + rng.randint(-5, 10);
+    }
+
+    // Trade: 0 en attendant la génération des routes
+    this.resources.trade = 0;
+
+    // Clamp values to 0-100
+    for (const key in this.resources) {
+      this.resources[key] = Math.max(0, Math.min(100, this.resources[key]));
+    }
+  }
+
+  _generateSpecialization() {
+    const rng = new SeededRandom(this.seed ^ 11111);
+    const specializations = ['agriculture', 'mining', 'forestry', 'fishing', 'crafts', 'learning', 'defense'];
+    this.specialization = rng.choice(specializations);
+  }
+
+  _generateLandmark() {
+    const rng = new SeededRandom(this.seed ^ 22222);
+    const landmarks = [
+      'Ancient Temple', 'Crystal Caves', 'Grand Library',
+      'Merchant Bazaar', 'War Monument', 'Sacred Spring',
+      'Tower of Stars', 'Hidden Waterfall', 'Stone Circles',
+      'Royal Palace', 'Archery Range', 'Grand Theater',
+      'Mystical Forest', 'Mountain Pass', 'Ancient Bridge',
+      'Floating Market', 'Dragon Statue', 'Healing Shrine'
+    ];
+    
+    // 70% de chance d'avoir un landmark
+    if (rng.next() < 0.7) {
+      this.landmark = rng.choice(landmarks);
+    }
+  }
+
+  _generateThreatLevel() {
+    const rng = new SeededRandom(this.seed ^ 33333);
+    // Menace inversement proportionnelle au score (moins de score = plus de menace)
+    // Plus une ville est prospère et grande, moins il y a de menace
+    const scoreNormalized = Math.min(1, this.score / 150); // Clamp à [0, 1]
+    const threatScore = (1 - scoreNormalized) * 0.6 + rng.next() * 0.4; // Plus d'aléatoire
+    
+    if (threatScore < 0.35) {
+      this.threatLevel = 'Low';
+    } else if (threatScore < 0.65) {
+      this.threatLevel = 'Medium';
+    } else {
+      this.threatLevel = 'High';
+    }
+  }
+
+  _generateProsperity() {
+    const rng = new SeededRandom(this.seed ^ 44444);
+    // Calcule la prospérité basée sur les ressources et la population
+    const avgResources = Object.values(this.resources).reduce((a, b) => a + b) / 5;
+    const populationFactor = Math.min(100, (this.population / 10000) * 100);
+    const prosperityScore = (avgResources * 0.6 + populationFactor * 0.4);
+    
+    if (prosperityScore < 30) {
+      this.prosperity = 'Struggling';
+    } else if (prosperityScore < 70) {
+      this.prosperity = 'Stable';
+    } else {
+      this.prosperity = 'Thriving';
+    }
   }
 }
 
@@ -240,9 +457,7 @@ export class CityPlacer {
 
       placedCities.push(selectedPosition);
       const cityIndex = this.cities.cities.length;
-      const citySeed = getNextSeed(seed, cityIndex);
-
-      console.log(`🏙️ City ${cityIndex+1} at (${x}, ${y}) with selectedScore=${selectedScore}, altitude=${altitude}`);
+      const citySeed = getNextSeed(seed, 10);
 
       this.cities.generateCity(selectedPosition, Math.floor(selectedScore), citySeed, altitude, climate, biome);
 

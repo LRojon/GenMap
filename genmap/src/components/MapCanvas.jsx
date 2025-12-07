@@ -4,8 +4,9 @@ import { getColorFromHeight, getColorFromClimate, getColorFromBiome, getColorFro
 import { Map } from '../utils/map';
 import CitiesPanel from './CitiesPanel';
 import CountriesPanel from './CountriesPanel';
+import CountriesDetailsPanel from './CountriesDetailsPanel';
 
-const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover }) => {
+const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover, onCountryHover, onCityHover }) => {
     const canvasRef = useRef(null);
     const climateCanvasRef = useRef(null);
     const biomeCanvasRef = useRef(null);
@@ -15,22 +16,34 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
     const [progress, setProgress] = useState(0);
     const [mapCities, setMapCities] = useState(null);
     const [mapCountries, setMapCountries] = useState(null);
+    const [hoveredCountry, setHoveredCountry] = useState(null);
+    const [hoveredCity, setHoveredCity] = useState(null);
+
+    // Synchroniser le pays survolé avec le parent App
+    useEffect(() => {
+        if (onCountryHover) {
+            onCountryHover(hoveredCountry);
+        }
+    }, [hoveredCountry, onCountryHover]);
+
+    // Synchroniser la ville survolée avec le parent App
+    useEffect(() => {
+        if (onCityHover) {
+            onCityHover(hoveredCity);
+        }
+    }, [hoveredCity, onCityHover]);
 
     useEffect(() => {
         // Créer un AbortController pour pouvoir annuler la génération
         const abortController = new AbortController();
         generationAbortRef.current = abortController;
 
-        console.log('MapCanvas: useEffect triggered - seed:', config.seed);
-
         const generateMap = async () => {
-            console.log('MapCanvas: generateMap started - seed:', config.seed);
             const canvas = canvasRef.current;
             const climateCanvas = climateCanvasRef.current;
             const biomeCanvas = biomeCanvasRef.current;
             const riverCanvas = riverCanvasRef.current;
             if (!canvas || !climateCanvas || !biomeCanvas || !riverCanvas) {
-                console.log('MapCanvas: Canvas refs not ready');
                 return;
             }
 
@@ -43,7 +56,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 const riverCtx = riverCanvas.getContext('2d', { willReadFrequently: false });
 
                 if (abortController.signal.aborted) {
-                    console.log('MapCanvas: Aborted before setup');
                     return;
                 }
 
@@ -59,12 +71,10 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 setProgress(10);
 
                 // Générer la carte
-                console.log('MapCanvas: Starting generation...');
                 const mapInstance = new Map();
                 mapInstance.generate(config.width, config.height, config.seed);
 
                 if (abortController.signal.aborted) {
-                    console.log('MapCanvas: Aborted after generation');
                     return;
                 }
 
@@ -76,7 +86,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 const riverMap1D = mapInstance.getRiverMap1D();
 
                 if (abortController.signal.aborted) {
-                    console.log('MapCanvas: Aborted after map conversion');
                     return;
                 }
 
@@ -164,7 +173,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
 
                 setProgress(100);
                 const endTime = performance.now();
-                console.log(`MapCanvas: Generation completed in ${(endTime - startTime).toFixed(2)}ms`);
 
                 onMapGenerated({
                     heightMap: heightMap1D,
@@ -186,7 +194,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
 
         // Cleanup: annuler la génération si le composant est unmounté ou config change
         return () => {
-            console.log('MapCanvas: useEffect cleanup - aborting generation');
             abortController.abort();
         };
     }, [config.seed, config.width, config.height, generationId, onMapGenerated]);
@@ -263,6 +270,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     config={config} 
                     activeTab={activeTab}
                     scale={config.scale}
+                    onCityHover={setHoveredCity}
                 />
             )}
             {mapCountries && (
@@ -271,6 +279,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     config={config} 
                     activeTab={activeTab}
                     scale={config.scale}
+                    onCountryHover={setHoveredCountry}
                 />
             )}
             {isGenerating && (
