@@ -4,6 +4,7 @@ import { getColorFromHeight, getColorFromClimate, getColorFromBiome, getColorFro
 import { Map } from '../utils/map';
 import CitiesPanel from './CitiesPanel';
 import CountriesPanel from './CountriesPanel';
+import RoutesOverlay from './RoutesOverlay';
 import CountriesDetailsPanel from './CountriesDetailsPanel';
 
 const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover, onCountryHover, onCityHover }) => {
@@ -16,6 +17,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
     const [progress, setProgress] = useState(0);
     const [mapCities, setMapCities] = useState(null);
     const [mapCountries, setMapCountries] = useState(null);
+    const [mapRoutes, setMapRoutes] = useState(null);
     const [hoveredCountry, setHoveredCountry] = useState(null);
     const [hoveredCity, setHoveredCity] = useState(null);
 
@@ -46,8 +48,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
             if (!canvas || !climateCanvas || !biomeCanvas || !riverCanvas) {
                 return;
             }
-
-            const startTime = performance.now();
 
             try {
                 const ctx = canvas.getContext('2d', { willReadFrequently: false });
@@ -167,12 +167,12 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 // Stocker la biome map pour la détection du hover
                 biomeMapRef.current = biomeMap1D;
 
-                // Stocker les cities et countries
+                // Stocker les cities, countries et routes
                 setMapCities(mapInstance.cities);
                 setMapCountries(mapInstance.countries);
+                setMapRoutes(mapInstance.routes);
 
                 setProgress(100);
-                const endTime = performance.now();
 
                 onMapGenerated({
                     heightMap: heightMap1D,
@@ -180,6 +180,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     biomeMap: biomeMap1D,
                     cities: mapInstance.cities,
                     countries: mapInstance.countries,
+                    routes: mapInstance.routes,
                 });
             } catch (error) {
                 if (!abortController.signal.aborted) {
@@ -280,6 +281,14 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     activeTab={activeTab}
                     scale={config.scale}
                     onCountryHover={setHoveredCountry}
+                />
+            )}
+            {mapRoutes && (
+                <RoutesOverlay 
+                    routes={mapRoutes} 
+                    config={config} 
+                    activeTab={activeTab}
+                    scale={config.scale}
                 />
             )}
             {isGenerating && (

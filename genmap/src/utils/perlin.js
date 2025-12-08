@@ -3,7 +3,7 @@
  * Basée sur l'implémentation classique de Perlin
  */
 
-class PerlinNoise {
+export class PerlinNoise {
   constructor(seed = 0) {
     this.permutation = [
       151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
@@ -79,6 +79,27 @@ class PerlinNoise {
     const x2 = this.lerp(u, this.grad(ab, xf, yf - 1), this.grad(bb, xf - 1, yf - 1));
 
     return (this.lerp(v, x1, x2) + 1) / 2; // Normaliser entre 0 et 1
+  }
+
+  /**
+   * Bruit Perlin multi-octave (Fractal Brownian Motion)
+   * Compatible avec l'algorithme Python
+   */
+  octaveNoise(x, y, octaves = 4, persistence = 0.5, scale = 0.1) {
+    let value = 0;
+    let amplitude = 1;
+    let frequency = 1;
+    let maxValue = 0;
+
+    for (let i = 0; i < octaves; i++) {
+      value += this.noise(x * frequency * scale, y * frequency * scale) * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+
+    // Normaliser et retourner entre -1 et 1
+    return (value / maxValue) * 2 - 1;
   }
 }
 

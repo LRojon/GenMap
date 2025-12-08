@@ -158,16 +158,9 @@ export class CountryGenerator {
     console.log(`📍 Influence initialized at ${this.cities.length} cities`);
   }
 
-  _propagateInfluence(seed = 0) {
+  _propagateInfluence() {
     console.log(`🌊 Propagating influence...`);
     const propagationStart = performance.now();
-    
-    // Créer une RNG déterministe pour les calculs de perte d'influence
-    let lossRngState = getNextSeed(seed, 500);
-    const lossRandom = () => {
-      lossRngState = (lossRngState * 1103515245 + 12345) >>> 0;
-      return (lossRngState >>> 0) / 0x100000000;
-    };
 
     // Créer une map rapide des villes par position
     const cityMap = new Map();
@@ -228,7 +221,7 @@ export class CountryGenerator {
         const altitude = this.heightMap[neighborIdx];
 
         // Calculer la perte d'influence (y compris pour l'eau)
-        const loss = this._calculateInfluenceLoss(altitude, countryId, lossRandom);
+        const loss = this._calculateInfluenceLoss(altitude, countryId);
         let newInfluence = influence * (1 - loss);
 
         // Vérifier si ce pixel contient une ville
@@ -256,29 +249,26 @@ export class CountryGenerator {
     console.log(`✓ Propagation complete: ${processed} pixels processed in ${propagationTime.toFixed(2)}ms`);
   }
 
-  _calculateInfluenceLoss(altitude, countryId, randomFunc) {
+  _calculateInfluenceLoss(altitude, countryId) {
     // Malus TRÈS FORT pour l'eau (90% loss) pour qu'elle serve de pont temporaire
     if (altitude <= SEA_LEVEL) {
       return 0.90; // 90% loss dans l'eau = influence réduite de 90%
     }
 
-    // Base perte: 0% à 0.2% (très minimal pour maximaliser la propagation)
-    let baseLoss = randomFunc() * 0.0005; // 0% à 0.05%
-
-    // Malus altitude: plus c'est haut, plus on perd
+    // Malus altitude: [0 - 0.2]% selon l'altitude terrestre [128 - 255]
     // (altitude - SEA_LEVEL) / (255 - SEA_LEVEL) = 0 à 1
     const altitudeRatio = Math.max(0, Math.min(1, (altitude - SEA_LEVEL) / (255 - SEA_LEVEL)));
-    const altitudeMalus = altitudeRatio * 0.002; // 0 à 0.2% malus sur montagne
+    const altitudeLoss = altitudeRatio * 0.002; // [0 - 0.2]%
 
-    // Aléatoire déterministe basé sur position et countryId: 0% à 0.05%
-    const seed = (altitude * 73856093) ^ (countryId * 19349663);
-    let x = seed >>> 0;
+    // Perte aléatoire: [0 - 0.05]%
+    const randomSeed = (altitude * 73856093) ^ (countryId * 19349663);
+    let x = randomSeed >>> 0;
     x ^= x << 13;
     x ^= x >> 17;
     x ^= x << 5;
-    const randomValue = ((x >>> 0) / 0x100000000) * 0.0005; // 0% à 0.05%
+    const randomLoss = ((x >>> 0) / 0x100000000) * 0.0005; // [0 - 0.05]%
 
-    return Math.max(0, Math.min(0.30, baseLoss + altitudeMalus + randomValue)); // Max 30% loss
+    return Math.max(0, altitudeLoss + randomLoss); // Total max: 0.25%
   }
 
   _assignPixelsToCountries() {
@@ -404,11 +394,6 @@ export class CountryGenerator {
       
       // ÉTAPE 2: Placer les villages en itérant sur les candidats
       // Les candidats valides doivent être testés pour proximité
-      let placementRngState = getNextSeed(countrySeed, 1000);
-      const placementRandom = () => {
-        placementRngState = (placementRngState * 1103515245 + 12345) >>> 0;
-        return (placementRngState >>> 0) / 0x100000000;
-      };
       
       for (let v = 0; v < villageSpecs.length; v++) {
         const spec = villageSpecs[v];

@@ -2,6 +2,7 @@ import { generatePerlinNoise } from './perlin';
 import { getNextSeed } from './seedGenerator';
 import { CityPlacer } from './cities';
 import { CountryGenerator } from './countries';
+import { RouteGenerator } from './routes';
 import { SEA_LEVEL } from './constants';
 
 export class Map {
@@ -12,6 +13,7 @@ export class Map {
     this.riverMap = null;
     this.cities = null;
     this.countries = null;
+    this.routes = null;
     // Cache pour les conversions 1D
     this._heightMap1D = null;
     this._climateMap1D = null;
@@ -80,6 +82,12 @@ export class Map {
     this.genCountries(width, height, getNextSeed(seed, 5));
     stepTime = performance.now() - stepStartTime;
     console.log(`%c⏱ Countries: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
+
+    // Étape 8: Routes
+    stepStartTime = performance.now();
+    this.genRoutes(width, height, getNextSeed(seed, 6));
+    stepTime = performance.now() - stepStartTime;
+    console.log(`%c⏱ Routes: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
 
     // Temps total
     const globalTime = performance.now() - globalStartTime;
@@ -517,5 +525,36 @@ export class Map {
     // Générer les pays
     this.countries = countryGenerator.generateCountries(seed);
   }
-}
 
+  genRoutes(width, height, seed) {
+    if (!this.cities || !this.cities.cities || this.cities.cities.length === 0) {
+      console.warn('⚠️ No cities to generate routes from');
+      return;
+    }
+
+    if (!this.countries || this.countries.length === 0) {
+      console.warn('⚠️ No countries to generate routes from');
+      return;
+    }
+
+    // Convertir la heightMap en 1D
+    const heightMap1D = this.getHeightMap1D();
+
+    // Obtenir la riverMap
+    const riverMap1D = this.getRiverMap1D();
+
+    // Créer le générateur de routes
+    const routeGenerator = new RouteGenerator(
+      this.cities,
+      this.countries,
+      heightMap1D,
+      riverMap1D,
+      width,
+      height,
+      seed
+    );
+
+    // Générer les routes
+    this.routes = routeGenerator.generateRoutes();
+  }
+}

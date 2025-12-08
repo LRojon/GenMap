@@ -1,35 +1,35 @@
 .countries-details-panel {
+  width: 340px;
+  max-height: 100vh;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  color: white;
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(16px) saturate(200%);
   border: 1.5px solid rgba(255, 255, 255, 0.25);
   border-radius: 14px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: 100%;
-  overflow-y: auto;
   box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
-  color: #1a1a1a;
-  font-size: 14px;
 }
 
 .countries-details-panel::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .countries-details-panel::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 4px;
 }
 
 .countries-details-panel::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
 }
 
 .countries-details-panel::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .countries-details-header {
@@ -37,15 +37,15 @@
   align-items: center;
   gap: 12px;
   padding-bottom: 16px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   margin-bottom: 14px;
 }
 
 .countries-details-header h2 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  color: #000;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
   letter-spacing: -0.7px;
 }
 
@@ -55,145 +55,115 @@
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }
 
 .countries-details-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 15px;
 }
 
 .detail-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 14px;
-  gap: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.detail-row:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.25);
+  flex-direction: column;
+  gap: 8px;
 }
 
 .detail-label {
-  font-weight: 700;
-  color: #0a0a0a;
-  flex-shrink: 0;
   font-size: 13px;
-  letter-spacing: 0.4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
 }
 
 .detail-value {
-  font-weight: 800;
-  color: #000;
-  text-align: right;
-  word-break: break-word;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .cities-section {
   margin-top: 16px;
   padding-top: 14px;
-  padding-bottom: 8px;
-  border-top: 2px solid rgba(255, 255, 255, 0.25);
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .cities-title {
-  font-weight: 800;
-  color: #000;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .cities-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  max-height: 200px;
+  gap: 8px;
+  max-height: 300px;
   overflow-y: auto;
+}
+
+.cities-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cities-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.cities-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
 }
 
 .city-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 11px 13px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.08));
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
   gap: 10px;
   transition: all 0.2s ease;
 }
 
 .city-item:hover {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.15));
+  background: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
 }
 
 .city-name {
-  color: #0a0a0a;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 500;
   flex-grow: 1;
 }
 
 .capital-badge {
-  background: linear-gradient(135deg, #ffd700, #ffed4e);
-  color: #333;
-  padding: 3px 9px;
-  border-radius: 14px;
+  background: #667eea;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.4);
+  letter-spacing: 0.5px;
   white-space: nowrap;
-}
-
-/* Animations */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.countries-details-panel {
-  animation: slideIn 0.3s ease-out;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .countries-details-panel {
-    padding: 16px;
-    font-size: 13px;
-  }
-
-  .countries-details-header h2 {
-    font-size: 18px;
-  }
-
-  .detail-label {
-    min-width: 80px;
-    font-size: 13px;
-  }
-
-  .city-item {
-    padding: 6px;
-  }
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
 }

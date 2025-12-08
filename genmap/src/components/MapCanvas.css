@@ -23,7 +23,8 @@
 
 .climate-overlay,
 .biome-overlay,
-.river-overlay {
+.river-overlay,
+.routes-overlay {
   position: absolute;
   top: 50%;
   left: 50%;
