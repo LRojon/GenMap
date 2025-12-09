@@ -52,7 +52,7 @@ export class Country {
 
 // Classe principale pour génération des pays
 export class CountryGenerator {
-  constructor(heightMap, climateMap, biomeMap, cities, width, height, riverMap = null, options = {}) {
+  constructor(heightMap, climateMap, biomeMap, cities, width, height, riverMap = null, options = {}, cityCandidates = null) {
     this.heightMap = heightMap;
     this.climateMap = climateMap;
     this.biomeMap = biomeMap;
@@ -61,6 +61,9 @@ export class CountryGenerator {
     this.width = width;
     this.height = height;
     this.countries = [];
+    
+    // ⚡ Candidats de CityPlacer pour les smallvillages
+    this.cityCandidates = cityCandidates || [];
     
     // Influence map: [influence, countryId] pour chaque pixel
     this.influenceMap = new Array(width * height);
@@ -73,6 +76,17 @@ export class CountryGenerator {
     this.perturbationAmount = options.perturbationAmount ?? 0.15; // [0-1] : 0.15 = 15% de variation
     this.perturbationScale = options.perturbationScale ?? 30; // Fréquence du bruit (pixels)
     this.perturbationOctaves = options.perturbationOctaves ?? 2; // Nombre de couches de bruit
+  }
+
+  /**
+   * Nettoie la mémoire après génération
+   * Supprime les structures temporaires volumineuses
+   * Garde voronoiRegionMap car il est utilisé par ReligionSystem
+   */
+  cleanup() {
+    // Supprimer les cartes temporaires (occupent beaucoup de RAM)
+    // NOTE: garder voronoiRegionMap pour ReligionSystem.propagateReligions()
+    this.influenceMap = null;
   }
 
   generateCountries(seed = 0) {
@@ -102,25 +116,27 @@ export class CountryGenerator {
     const countryTime = performance.now() - countryStart;
     console.log(`%c✓ Countries generated in ${countryTime.toFixed(2)}ms`, 'color: #48bb78;');
 
+    // Nettoyer la mémoire temporaire (sauf voronoiRegionMap)
+    this.cleanup();
+
     return this.countries;
   }
 
   _generateSmallVillages(seed, numCountries) {
     /**
-     * Génère des petits villages aléatoirement aux positions à bas scores
-     * 3-5 villages par pays à générer
-     * Éloignés des grandes villes, pas dans l'eau/mer/rivière/lac
+     * Génère des petits villages à partir des candidats CityPlacer
+     * ⚡ SUPER OPTIMISÉ: Réutiliser les candidats au lieu de rescanner!
+     * Les candidats viennent du scan tous les 5 pixels des villes principales
      */
     
-    const villageStart = performance.now();
-    let villagesGenerated = 0;
+    // Utiliser les candidats du CityPlacer (déjà filtrés, déjà scorés)
+    let villagePositions = this.cityCandidates && this.cityCandidates.length > 0 
+      ? [...this.cityCandidates]  // Copie pour ne pas modifier l'original
+      : [];
     
-    // Pré-calculer les scores de tous les pixels (altitude + climat)
-    const pixelScores = new Float32Array(this.width * this.height);
-    for (let i = 0; i < this.width * this.height; i++) {
-      const altitude = this.heightMap[i];
-      const climate = this.climateMap[i];
-      pixelScores[i] = this._calculateLocationScore(altitude, climate);
+    // Si pas de candidats, fallback vide (les villes principales suffisent)
+    if (villagePositions.length === 0) {
+      return;
     }
     
     let rngState = seed;
@@ -139,67 +155,79 @@ export class CountryGenerator {
     
     const totalVillagesToGenerate = numCountries * (3 + Math.floor(numVillagesRandom() * 3)); // 3-5 par pays
     
-    // Générer les villages
-    for (let v = 0; v < totalVillagesToGenerate; v++) {
+    // Sélectionner aléatoirement N villages parmi les candidats
+    const placedVillages = [];
+    const minDistanceVillages = 30; // Minimum entre deux villages
+    
+    for (let v = 0; v < totalVillagesToGenerate && villagePositions.length > 0; v++) {
       const villageSeed = getNextSeed(villageBaseSeed, v + 1);
       
-      // Chercher une position valide pour ce village
-      let found = false;
-      let attempts = 0;
-      const maxAttempts = 100;
+      // Sélection pondérée par score (bas score = plus probable pour villages)
+      const totalWeight = villagePositions.reduce((sum, [, , , score]) => sum + Math.max(0, 100 - score), 0);
       
-      while (!found && attempts < maxAttempts) {
-        attempts++;
-        
-        // Générer une position aléatoire
-        const x = Math.floor(seededRandom() * this.width);
-        const y = Math.floor(seededRandom() * this.height);
-        const pixelIdx = y * this.width + x;
-        
-        const altitude = this.heightMap[pixelIdx];
-        const climate = this.climateMap[pixelIdx];
-        
-        // Vérifier conditions:
-        // 1. Pas dans l'eau (altitude > SEA_LEVEL)
-        if (altitude <= SEA_LEVEL) continue;
-        
-        // 2. Pas trop proche des rivières
-        if (this.riverMap && this.riverMap[pixelIdx] === 1) continue;
-        
-        // 3. Score bas (< 100) - villages dans les lieux moins favorables
-        const pixelScore = pixelScores[pixelIdx];
-        if (pixelScore >= 100) continue;
-        
-        // 4. Assez loin des grandes villes (distance >= 40 pixels)
-        let tooCloseToCity = false;
-        for (const city of this.cities) {
-          const dist = Math.hypot(city.position[0] - x, city.position[1] - y);
-          if (dist < 40) {
-            tooCloseToCity = true;
-            break;
-          }
+      if (totalWeight <= 0) break;
+      
+      let rand = seededRandom() * totalWeight;
+      let cumulative = 0;
+      let selectedIdx = -1;
+      
+      for (let i = 0; i < villagePositions.length; i++) {
+        const [, , , score] = villagePositions[i];
+        const weight = Math.max(0, 100 - score);
+        cumulative += weight;
+        if (cumulative >= rand) {
+          selectedIdx = i;
+          break;
         }
-        if (tooCloseToCity) continue;
-        
-        // Position valide, créer le village
-        const village = new City(
-          [x, y],
-          villageSeed,
-          Math.floor(altitude * 255),
-          Math.floor(climate * 255),
-          this.biomeMap[pixelIdx]
-        );
-        
-        village.score = pixelScore;
-        village.generateFullData();
-        
-        this.cities.push(village);
-        villagesGenerated++;
-        found = true;
       }
+      
+      if (selectedIdx === -1) break;
+      
+      const [pixelIdx, x, y, score] = villagePositions[selectedIdx];
+      
+      // Vérifier distance min avec autres villages placés
+      let tooCloseToOtherVillage = false;
+      for (const [placeX, placeY] of placedVillages) {
+        const dist = Math.hypot(placeX - x, placeY - y);
+        if (dist < minDistanceVillages) {
+          tooCloseToOtherVillage = true;
+          break;
+        }
+      }
+      
+      if (tooCloseToOtherVillage) {
+        // Supprimer ce candidat et continuer
+        villagePositions.splice(selectedIdx, 1);
+        continue;
+      }
+      
+      // Position valide, créer le village
+      const altitude = this.heightMap[pixelIdx];
+      const climate = this.climateMap[pixelIdx];
+      const village = new City(
+        [x, y],
+        villageSeed,
+        altitude,
+        climate,
+        this.biomeMap[pixelIdx]
+      );
+      
+      village.score = score;
+      village.generateFullData();
+      
+      this.cities.push(village);
+      placedVillages.push([x, y]);
+      
+      // Supprimer les candidats proches de celui-ci
+      const newPositions = [];
+      for (const [pIdx, pX, pY, pScore] of villagePositions) {
+        const dist = Math.abs(pX - x) + Math.abs(pY - y);
+        if (dist >= minDistanceVillages) {
+          newPositions.push([pIdx, pX, pY, pScore]);
+        }
+      }
+      villagePositions.splice(0, villagePositions.length, ...newPositions);
     }
-    
-    const villageTime = performance.now() - villageStart;
   }
 
   _selectCapitalCities(seed) {
@@ -242,8 +270,6 @@ export class CountryGenerator {
      * - Positions des smallVillages
      * - Points supplémentaires proportionnels à la superficie
      */
-    
-    const voronoiStart = performance.now();
     
     // Collecter tous les points Voronoi
     const voronoiPoints = [];
@@ -296,14 +322,12 @@ export class CountryGenerator {
     }
     
     this.voronoiPoints = voronoiPoints;
-    const voronoiTime = performance.now() - voronoiStart;
   }
 
   _assignPixelsThroughVoronoi(seed) {
     /**
      * Étape 3: Assigner les pixels aux pays via Voronoi + propagation avec déperdition
      */
-    const assignStart = performance.now();
     
     // Initialiser la map d'influence basée sur Voronoi
     this.influenceMap = new Array(this.width * this.height);
@@ -477,8 +501,6 @@ export class CountryGenerator {
         }
       }
     }
-    
-    const assignTime = performance.now() - assignStart;
   }
 
   _computeVoronoiNeighbors() {

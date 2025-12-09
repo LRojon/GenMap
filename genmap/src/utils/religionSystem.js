@@ -103,6 +103,27 @@ export class ReligionSystem {
     this.cultureMap = null; // region_id -> culture_id
   }
 
+  /**
+   * Nettoie la mémoire après génération
+   * Garde seulement les données nécessaires pour l'affichage
+   */
+  cleanup() {
+    // Garder les collections pour le panneau de détails, mais réduire la RAM
+    // Vider les followers et autres détails non-essentiels
+    for (const religion of this.religions.values()) {
+      religion.followers = new Map();
+      religion.events = [];
+      religion.conflictReligions = new Set();
+    }
+    
+    for (const culture of this.cultures.values()) {
+      culture.influences = [];
+    }
+    
+    // Vider les religions fondamentales si pas utilisées
+    // (garder majorCultures car utilisées dans les panneaux)
+  }
+
   generateFoundationalReligions() {
     /**
      * Crée les religions initiales dans des villes/villages aléatoires
@@ -511,52 +532,13 @@ export class ReligionSystem {
       }
     }
 
-    // Créer les cultures avec leurs champs de bruit Perlin
-    const cultureNoises = new Map(); // culture_id -> noise_grid (Uint8Array)
-
+    // Créer les cultures AVANT d'assigner les pixels
     for (let cultureId = 0; cultureId < numCultures; cultureId++) {
-      // Générer un bruit de Perlin unique pour cette culture
       const cultureSeed = this.seed ^ (cultureId * 777);
-      const perlinNoise = new PerlinNoise(cultureSeed);
-
-      // Générer la grille de bruit (normalisée 0-255)
-      const noiseGrid = new Uint8Array(width * height);
-      const scale = 0.008; // Même scale que Python
-      const octaves = 6;
-      const persistence = 0.6;
-
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          let value = 0;
-          let maxValue = 0;
-          let currentAmplitude = 1;
-          let currentFrequency = 1;
-
-          // Multi-octave noise
-          for (let i = 0; i < octaves; i++) {
-            const sampleX = (x * scale) * currentFrequency;
-            const sampleY = (y * scale) * currentFrequency;
-            
-            value += perlinNoise.noise(sampleX, sampleY) * currentAmplitude;
-            maxValue += currentAmplitude;
-
-            currentAmplitude *= persistence;
-            currentFrequency *= 2;
-          }
-
-          // Normaliser entre 0 et 255
-          const normalized = (value / maxValue + 1) / 2; // Passer de [-1,1] à [0,1]
-          noiseGrid[y * width + x] = Math.floor(Math.max(0, Math.min(255, normalized * 255)));
-        }
-      }
-
-      cultureNoises.set(cultureId, noiseGrid);
-
-      // Créer l'objet culture
       const cultureName = this._generateCultureName(cultureSeed);
       const originCity = selectedCities[cultureId];
 
-      // Déterminer le climat basé sur la ville d'origine (analyser un périmètre autour de la ville)
+      // Déterminer le climat basé sur la ville d'origine
       const originCityRegionId = voronoiRegionMap[originCity.position[1] * width + originCity.position[0]];
       const climateType = this._getBiomeVariantForRegion(originCityRegionId, voronoiRegionMap, mapData, originCity.position, width);
 
@@ -580,9 +562,21 @@ export class ReligionSystem {
     }
 
     // Créer la carte de cultures pixel par pixel (pixel_idx -> culture_id)
-    const culturePixelMap = new Uint8Array(width * height); // Pour chaque pixel, l'ID de la culture (-1 si aucune)
+    const culturePixelMap = new Uint8Array(width * height); // Pour chaque pixel, l'ID de la culture
     culturePixelMap.fill(255); // 255 = pas de culture
 
+    // ⚡ OPTIMISATION: Créer les PerlinNoise instances UNE FOIS au lieu de par pixel
+    const perlinNoiseSystems = new Map();
+    for (let cultureId = 0; cultureId < numCultures; cultureId++) {
+      const cultureSeed = this.seed ^ (cultureId * 777);
+      perlinNoiseSystems.set(cultureId, new PerlinNoise(cultureSeed));
+    }
+
+    const scale = 0.008;
+    const octaves = 6;
+    const persistence = 0.6;
+
+    // Générer les bruits Perlin et assigner les cultures EN MÊME TEMPS (pas de stockage)
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const pixelIdx = y * width + x;
@@ -595,10 +589,30 @@ export class ReligionSystem {
         let maxInfluence = 0;
         let winningCultureId = 0;
 
-        // Trouver la culture avec l'influence la plus forte
+        // Trouver la culture avec l'influence la plus forte (réutiliser les instances)
         for (let cultureId = 0; cultureId < numCultures; cultureId++) {
-          const noiseGrid = cultureNoises.get(cultureId);
-          const influence = noiseGrid[pixelIdx];
+          const perlinNoise = perlinNoiseSystems.get(cultureId);
+
+          let value = 0;
+          let maxValue = 0;
+          let currentAmplitude = 1;
+          let currentFrequency = 1;
+
+          // Multi-octave noise pour ce pixel
+          for (let i = 0; i < octaves; i++) {
+            const sampleX = (x * scale) * currentFrequency;
+            const sampleY = (y * scale) * currentFrequency;
+            
+            value += perlinNoise.noise(sampleX, sampleY) * currentAmplitude;
+            maxValue += currentAmplitude;
+
+            currentAmplitude *= persistence;
+            currentFrequency *= 2;
+          }
+
+          // Normaliser entre 0 et 255
+          const normalized = (value / maxValue + 1) / 2; // Passer de [-1,1] à [0,1]
+          const influence = Math.floor(Math.max(0, Math.min(255, normalized * 255)));
           
           if (influence > maxInfluence) {
             maxInfluence = influence;

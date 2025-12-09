@@ -471,7 +471,18 @@ export class CityPlacer {
     const placementTime = performance.now() - placementStart;
     console.log(`%c✓ Placed ${placedCities.length} cities in ${placementTime.toFixed(2)}ms`, 'color: #48bb78;');
 
-    return this.cities;
+    // ⚡ Retourner aussi les candidats restants pour smallvillages
+    // Format: Array de [pixelIdx, x, y, score]
+    const remainingCandidates = [];
+    for (const [pos, score] of candidates) {
+      const pixelIdx = pos[1] * this.width + pos[0];
+      remainingCandidates.push([pixelIdx, pos[0], pos[1], score]);
+    }
+
+    return {
+      cities: this.cities,
+      candidatePositions: remainingCandidates
+    };
   }
 
   _calculateCityScores() {

@@ -99,6 +99,11 @@ export class Map {
     stepTime = performance.now() - stepStartTime;
     console.log(`%c⏱ Religions & Cultures: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
 
+    // Nettoyage mémoire après génération
+    if (this.religionSystem) {
+      this.religionSystem.cleanup();
+    }
+
     // Temps total
     const globalTime = performance.now() - globalStartTime;
     const globalTimeSeconds = (globalTime / 1000).toFixed(3);
@@ -506,7 +511,11 @@ export class Map {
     );
 
     // Placer les villes
-    this.cities = cityPlacer.placeCities(numCities, seed);
+    const placementResult = cityPlacer.placeCities(numCities, seed);
+    this.cities = placementResult.cities;
+    
+    // ⚡ Passer les candidats restants pour les smallvillages
+    this.cityCandidates = placementResult.candidatePositions;
   }
 
   genCountries(width, height, seed) {
@@ -529,7 +538,9 @@ export class Map {
       this.cities,
       width,
       height,
-      riverMap1D
+      riverMap1D,
+      {}, // options
+      this.cityCandidates // ⚡ Passer les candidats pour smallvillages
     );
 
     // Générer les pays
