@@ -19,8 +19,6 @@ function MyMapComponent() {
       height: 768,
       seed: 12345,
     });
-
-    console.log('Carte générée:', mapData);
   };
 
   return (

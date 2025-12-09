@@ -3,6 +3,7 @@ import { getNextSeed } from './seedGenerator';
 import { CityPlacer } from './cities';
 import { CountryGenerator } from './countries';
 import { RouteGenerator } from './routes';
+import { ReligionSystem } from './religionSystem';
 import { SEA_LEVEL } from './constants';
 
 export class Map {
@@ -30,13 +31,16 @@ export class Map {
   generate(width, height, seed, maskStrength = 1.5) {
     // Nettoyer les caches avant nouvelle génération
     this._clearCache();
+    
+    // Stocker width et height pour accès ultérieur (p.ex. dans ReligionSystem)
+    this.width = width;
+    this.height = height;
+    
     // Nettoyer la console
     console.clear();
     
     // Log du démarrage
     console.log('%c=== GenMap Generation Started ===', 'color: #667eea; font-weight: bold; font-size: 14px;');
-    console.log(`Seed: ${seed} | Size: ${width}x${height}`);
-    console.log('');
     
     const globalStartTime = performance.now();
     let stepStartTime;
@@ -89,13 +93,17 @@ export class Map {
     stepTime = performance.now() - stepStartTime;
     console.log(`%c⏱ Routes: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
 
+    // Étape 9: Religions
+    stepStartTime = performance.now();
+    this.genReligions(getNextSeed(seed, 7));
+    stepTime = performance.now() - stepStartTime;
+    console.log(`%c⏱ Religions & Cultures: ${stepTime.toFixed(2)}ms`, 'color: #48bb78;');
+
     // Temps total
     const globalTime = performance.now() - globalStartTime;
     const globalTimeSeconds = (globalTime / 1000).toFixed(3);
-    console.log('');
     console.log(`%c✓ Total Generation Time: ${globalTime.toFixed(2)}ms (${globalTimeSeconds}s)`, 'color: #667eea; font-weight: bold; font-size: 14px;');
     console.log('%c=== Generation Complete ===', 'color: #667eea; font-weight: bold; font-size: 14px;');
-    console.log('');
   }
 
   genHeightMap(width, height, seed) {
@@ -511,6 +519,7 @@ export class Map {
     const heightMap1D = this.getHeightMap1D();
     const climateMap1D = this.getClimateMap1D();
     const biomeMap1D = this.getBiomeMap1D();
+    const riverMap1D = this.getRiverMap1D();
 
     // Créer le générateur de pays
     const countryGenerator = new CountryGenerator(
@@ -519,11 +528,19 @@ export class Map {
       biomeMap1D,
       this.cities,
       width,
-      height
+      height,
+      riverMap1D
     );
 
     // Générer les pays
     this.countries = countryGenerator.generateCountries(seed);
+    
+    // Mettre à jour les villes avec celles du CountryGenerator (qui inclut les smallVillages ajoutés)
+    this.cities.cities = countryGenerator.cities;
+    
+    // Stocker les données Voronoi pour affichage optionnel
+    this.voronoiRegionMap = countryGenerator.voronoiRegionMap;
+    this.voronoiPoints = countryGenerator.voronoiPoints;
   }
 
   genRoutes(width, height, seed) {
@@ -556,5 +573,34 @@ export class Map {
 
     // Générer les routes
     this.routes = routeGenerator.generateRoutes();
+  }
+
+  genReligions(seed) {
+    if (!this.cities || !this.cities.cities || this.cities.cities.length === 0) {
+      console.warn('⚠️ No cities to generate religions from');
+      return;
+    }
+
+    if (!this.countries || this.countries.length === 0) {
+      console.warn('⚠️ No countries to generate religions from');
+      return;
+    }
+
+    // Créer le système de religions
+    const religionSystem = new ReligionSystem(seed, this);
+
+    // Générer les religions fondamentales
+    religionSystem.generateFoundationalReligions();
+
+    // Propager les religions (crée automatiquement religionMap)
+    religionSystem.propagateReligions();
+
+    // Générer et propager les cultures
+    religionSystem.generateMajorCultures();
+
+    // Stocker le système de religions
+    this.religionSystem = religionSystem;
+    this.religions = Array.from(religionSystem.religions.values());
+    this.cultures = Array.from(religionSystem.cultures.values());
   }
 }

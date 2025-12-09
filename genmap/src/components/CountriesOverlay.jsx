@@ -4,6 +4,7 @@ import './CountriesOverlay.css';
 const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
   const canvasRef = useRef(null);
   const countriesMapRef = useRef(null);
+  // eslint-disable-next-line no-unused-vars
   const [hoveredCountryId, setHoveredCountryId] = useState(null);
 
   useEffect(() => {
@@ -42,7 +43,7 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
         data[idx] = rgb[0];
         data[idx + 1] = rgb[1];
         data[idx + 2] = rgb[2];
-        data[idx + 3] = 150; // Semi-transparent
+        data[idx + 3] = 255; // Opaque
       }
     }
 
@@ -121,18 +122,21 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
       }
     }
 
-    // Troisième passe: dessiner les frontières épaissies
+    // Troisième passe: dessiner les frontières épaissies avec la couleur du pays
     for (const borderPixelIdx of thickBorders) {
       const currentCountry = pixelToCountry[borderPixelIdx];
       
       // Ne pas peindre sur de l'eau
       if (currentCountry === 0xFFFFFFFF) continue;
 
-      // Utiliser une couleur contrastante (noir) pour les frontières
+      // Utiliser la couleur du pays (opaque)
+      const country = countries[currentCountry];
+      const rgb = this._hslToRgb(country.color);
+      
       const idx = borderPixelIdx * 4;
-      data[idx] = 0;      // R - noir
-      data[idx + 1] = 0;  // G - noir
-      data[idx + 2] = 0;  // B - noir
+      data[idx] = rgb[0];      // R
+      data[idx + 1] = rgb[1];  // G
+      data[idx + 2] = rgb[2];  // B
       data[idx + 3] = 255; // Opacité complète
     }
 

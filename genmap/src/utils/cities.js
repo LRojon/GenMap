@@ -365,16 +365,12 @@ export class CityPlacer {
   }
 
   placeCities(numCities, seed) {
-    console.log(`\n🏙 City Placement Started (target: ${numCities} cities)`);
     const placementStart = performance.now();
 
     const scoreMap = this._calculateCityScores();
     const candidates = this._createCandidates(scoreMap);
 
-    console.log(`📍 Candidates found: ${candidates.length} valid positions`);
-
     if (!candidates.length) {
-      console.log('⚠️ No valid candidates for city placement');
       return this.cities;
     }
 
@@ -427,7 +423,6 @@ export class CityPlacer {
       const posAltitude = this.heightMap[posY * this.width + posX];
       if (posAltitude <= SEA_LEVEL) {
         // Position dans l'eau, sauter
-        console.warn(`⚠️ Selected position in water at (${posX}, ${posY}) with altitude ${posAltitude}`);
         continue;
       }
 
@@ -451,7 +446,6 @@ export class CityPlacer {
 
       // ===== VÉRIFICATION STRICTE: REJETER SI DANS L'EAU =====
       if (altitude <= SEA_LEVEL) {
-        console.warn(`❌ REJECTED: City in water at (${x}, ${y}) with altitude ${altitude}, score=${selectedScore}`);
         continue;
       }
 
@@ -507,8 +501,6 @@ export class CityPlacer {
         }
       }
     }
-
-    console.log(`🌊 Water pixels (key): ${waterCount}, Land pixels (key): ${landCount}`);
 
     const scoreStep = 5
 
@@ -587,11 +579,6 @@ export class CityPlacer {
     // ===== Bonus proximité côte (commerce maritime) =====
     const coastScore = this._getCoastalProximityBonus(x, y);
     score += coastScore;
-
-    // Debug pour x=y=0 ou autres
-    if (x === 0 && y === 0) {
-      console.log(`🔍 Score breakdown at (0,0): base=50, altitude=${altitude}, biome=${biomeScore}, climate=${climateScore}, river=${riverScore}, coast=${coastScore}, total=${score}`);
-    }
 
     return score; // Pas de Math.max(0, score) - on garde les scores négatifs
   }
@@ -758,8 +745,6 @@ export class CityPlacer {
       }
     }
 
-    console.log(`📊 Score distribution (key pixels only):`, scoreDistribution);
-    console.log(`📍 Total candidates from key pixels: ${candidates.length}`);
     return candidates;
   }
 }

@@ -18,6 +18,11 @@ const CitiesOverlay = ({ cities, config, activeTab, scale = 1 }) => {
     // Effacer le canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Afficher les villes sur tous les onglets sauf 'cities'
+    if (activeTab === 'cities') {
+      return;
+    }
+
     // Dessiner les villes
     cities.cities.forEach((city, index) => {
       const [x, y] = city.position;
@@ -102,9 +107,9 @@ const CitiesOverlay = ({ cities, config, activeTab, scale = 1 }) => {
         top: '50%',
         transform: `translate(-50%, -50%) scale(${scale})`,
         transformOrigin: 'center',
-        opacity: activeTab === 'generation' || activeTab === 'countries' ? 0.9 : 0,
-        pointerEvents: activeTab === 'generation' || activeTab === 'countries' ? 'auto' : 'none',
-        cursor: 'pointer',
+        opacity: activeTab === 'cities' ? 0 : 0.9,
+        pointerEvents: activeTab === 'countries' ? 'auto' : 'none',
+        cursor: activeTab === 'countries' ? 'pointer' : 'default',
         zIndex: 3,
       }}
     />

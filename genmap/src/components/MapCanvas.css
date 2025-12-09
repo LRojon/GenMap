@@ -24,7 +24,10 @@
 .climate-overlay,
 .biome-overlay,
 .river-overlay,
-.routes-overlay {
+.routes-overlay,
+.voronoi-overlay,
+.religions-overlay,
+.cultures-overlay {
   position: absolute;
   top: 50%;
   left: 50%;

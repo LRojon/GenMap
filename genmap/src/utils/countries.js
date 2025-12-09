@@ -4,6 +4,7 @@ import { ProcNameGenerator, City } from './cities.js';
 
 
 
+
 // Classe Country
 export class Country {
   constructor(id, capitalCity, seed = 0) {
@@ -51,10 +52,11 @@ export class Country {
 
 // Classe principale pour génération des pays
 export class CountryGenerator {
-  constructor(heightMap, climateMap, biomeMap, cities, width, height) {
+  constructor(heightMap, climateMap, biomeMap, cities, width, height, riverMap = null, options = {}) {
     this.heightMap = heightMap;
     this.climateMap = climateMap;
     this.biomeMap = biomeMap;
+    this.riverMap = riverMap;
     this.cities = cities.cities; // Array de City objects
     this.width = width;
     this.height = height;
@@ -65,42 +67,139 @@ export class CountryGenerator {
     for (let i = 0; i < width * height; i++) {
       this.influenceMap[i] = [0, -1]; // [influence, countryId]
     }
+    
+    // Options de perturbation des frontières
+    this.borderPerturbationEnabled = options.borderPerturbationEnabled !== false; // true par défaut
+    this.perturbationAmount = options.perturbationAmount ?? 0.15; // [0-1] : 0.15 = 15% de variation
+    this.perturbationScale = options.perturbationScale ?? 30; // Fréquence du bruit (pixels)
+    this.perturbationOctaves = options.perturbationOctaves ?? 2; // Nombre de couches de bruit
   }
 
   generateCountries(seed = 0) {
-    console.log(`\n🏛️ Country Generation Started`);
     const countryStart = performance.now();
 
     // Étape 0: Calculer le nombre de pays et sélectionner les capitales
     const capitalCities = this._selectCapitalCities(seed);
-    console.log(`🏛️ Selected ${capitalCities.length} capital cities for countries`);
+
+    // Étape 0.5: Générer les petits villages AVANT les pays (pour inclusion dans Voronoi)
+    this._generateSmallVillages(seed, capitalCities.length);
 
     // Étape 1: Créer un pays pour chaque capitale
     this._initializeCountries(capitalCities, seed);
 
-    // Étape 2: Initialiser l'influence map avec les villes
-    this._initializeInfluenceMap();
+    // Étape 2: NOUVELLE APPROCHE - Générer Voronoi avec points supplémentaires (incluant smallVillages)
+    this._generateVoronoiWithAdditionalPoints(seed);
 
-    // Étape 3: Propager l'influence
-    this._propagateInfluence(seed);
+    // Étape 3: Assigner les pixels aux pays via Voronoi + propagation avec déperdition
+    this._assignPixelsThroughVoronoi(seed);
 
-    // Étape 4: Assigner les pixels aux pays
-    this._assignPixelsToCountries();
-
-    // Étape 4.5: Gérer les îles
+    // Étape 4: Gérer les îles
     this._handleIslands();
 
     // Étape 5: Réassigner les villes capturées
     this._reassignCapturedCities();
 
-    // Étape 6: Placer les petits villages (3-5 par pays avec score < 100)
-    this._placeSmallVillages(seed);
-
     const countryTime = performance.now() - countryStart;
     console.log(`%c✓ Countries generated in ${countryTime.toFixed(2)}ms`, 'color: #48bb78;');
-    console.log(`📊 Total countries: ${this.countries.length}`);
 
     return this.countries;
+  }
+
+  _generateSmallVillages(seed, numCountries) {
+    /**
+     * Génère des petits villages aléatoirement aux positions à bas scores
+     * 3-5 villages par pays à générer
+     * Éloignés des grandes villes, pas dans l'eau/mer/rivière/lac
+     */
+    
+    const villageStart = performance.now();
+    let villagesGenerated = 0;
+    
+    // Pré-calculer les scores de tous les pixels (altitude + climat)
+    const pixelScores = new Float32Array(this.width * this.height);
+    for (let i = 0; i < this.width * this.height; i++) {
+      const altitude = this.heightMap[i];
+      const climate = this.climateMap[i];
+      pixelScores[i] = this._calculateLocationScore(altitude, climate);
+    }
+    
+    let rngState = seed;
+    const seededRandom = () => {
+      rngState = (rngState * 1103515245 + 12345) >>> 0;
+      return (rngState >>> 0) / 0x100000000;
+    };
+    
+    // Nombre total de villages à générer (3-5 par pays)
+    const villageBaseSeed = getNextSeed(seed, 999);
+    let numVillagesRngState = villageBaseSeed;
+    const numVillagesRandom = () => {
+      numVillagesRngState = (numVillagesRngState * 1103515245 + 12345) >>> 0;
+      return (numVillagesRngState >>> 0) / 0x100000000;
+    };
+    
+    const totalVillagesToGenerate = numCountries * (3 + Math.floor(numVillagesRandom() * 3)); // 3-5 par pays
+    
+    // Générer les villages
+    for (let v = 0; v < totalVillagesToGenerate; v++) {
+      const villageSeed = getNextSeed(villageBaseSeed, v + 1);
+      
+      // Chercher une position valide pour ce village
+      let found = false;
+      let attempts = 0;
+      const maxAttempts = 100;
+      
+      while (!found && attempts < maxAttempts) {
+        attempts++;
+        
+        // Générer une position aléatoire
+        const x = Math.floor(seededRandom() * this.width);
+        const y = Math.floor(seededRandom() * this.height);
+        const pixelIdx = y * this.width + x;
+        
+        const altitude = this.heightMap[pixelIdx];
+        const climate = this.climateMap[pixelIdx];
+        
+        // Vérifier conditions:
+        // 1. Pas dans l'eau (altitude > SEA_LEVEL)
+        if (altitude <= SEA_LEVEL) continue;
+        
+        // 2. Pas trop proche des rivières
+        if (this.riverMap && this.riverMap[pixelIdx] === 1) continue;
+        
+        // 3. Score bas (< 100) - villages dans les lieux moins favorables
+        const pixelScore = pixelScores[pixelIdx];
+        if (pixelScore >= 100) continue;
+        
+        // 4. Assez loin des grandes villes (distance >= 40 pixels)
+        let tooCloseToCity = false;
+        for (const city of this.cities) {
+          const dist = Math.hypot(city.position[0] - x, city.position[1] - y);
+          if (dist < 40) {
+            tooCloseToCity = true;
+            break;
+          }
+        }
+        if (tooCloseToCity) continue;
+        
+        // Position valide, créer le village
+        const village = new City(
+          [x, y],
+          villageSeed,
+          Math.floor(altitude * 255),
+          Math.floor(climate * 255),
+          this.biomeMap[pixelIdx]
+        );
+        
+        village.score = pixelScore;
+        village.generateFullData();
+        
+        this.cities.push(village);
+        villagesGenerated++;
+        found = true;
+      }
+    }
+    
+    const villageTime = performance.now() - villageStart;
   }
 
   _selectCapitalCities(seed) {
@@ -118,15 +217,11 @@ export class CountryGenerator {
     const variation = 0.7 + seededRandom() * 0.6; // Entre 0.7 et 1.3
     const numCountries = Math.max(3, Math.floor(baseCountries * variation));
 
-    console.log(`📊 Area: ${area} | Base: ${baseCountries} | Variation: ${variation.toFixed(2)} | Final: ${numCountries}`);
-
     // Trier les villes par score décroissant
     const sortedCities = [...this.cities].sort((a, b) => b.score - a.score);
 
     // Prendre les X meilleures villes comme capitales
     const capitalCities = sortedCities.slice(0, Math.min(numCountries, sortedCities.length));
-
-    console.log(`🏙️ Top capital scores: ${capitalCities.map(c => c.score).join(', ')}`);
 
     return capitalCities;
   }
@@ -138,346 +233,326 @@ export class CountryGenerator {
       const country = new Country(i, city, citySeed);
       this.countries.push(country);
     }
-    console.log(`🏛️ Created ${this.countries.length} countries (1 per top capital)`);
   }
 
-  _initializeInfluenceMap() {
-    // Initialiser la carte d'influence: une influence par ville
-    for (let countryId = 0; countryId < this.countries.length; countryId++) {
-      const city = this.countries[countryId].capitalCity;
-      const [x, y] = city.position;
-      const idx = y * this.width + x;
-      
-      // Placer l'influence initiale à la ville
-      // Utiliser un score plus élevé pour que tous les pays aient une chance de se développer
-      // Score initial augmenté: min 150, max 250 pour donner plus de puissance de propagation
-      const baseInfluence = Math.max(150, Math.min(250, city.score * 2));
-      this.influenceMap[idx] = [baseInfluence, countryId];
-    }
-
-    console.log(`📍 Influence initialized at ${this.cities.length} cities`);
-  }
-
-  _propagateInfluence() {
-    console.log(`🌊 Propagating influence...`);
-    const propagationStart = performance.now();
-
-    // Créer une map rapide des villes par position
-    const cityMap = new Map();
+  _generateVoronoiWithAdditionalPoints(seed) {
+    /**
+     * Étape 2: Générer Voronoi avec:
+     * - Positions des villes
+     * - Positions des smallVillages
+     * - Points supplémentaires proportionnels à la superficie
+     */
+    
+    const voronoiStart = performance.now();
+    
+    // Collecter tous les points Voronoi
+    const voronoiPoints = [];
+    
+    // Ajouter toutes les villes et smallVillages
     for (const city of this.cities) {
-      const [x, y] = city.position;
-      const idx = y * this.width + x;
-      cityMap.set(idx, city);
+      voronoiPoints.push(city.position);
     }
-
-    // Utiliser une priorité queue simple avec tri une seule fois au départ
-    const visited = new Uint8Array(this.width * this.height);
-    const queue = [];
-
-    // Initialiser la queue avec tous les pixels ayant une influence
-    for (let i = 0; i < this.width * this.height; i++) {
-      const [influence, countryId] = this.influenceMap[i];
-      if (influence > 0) {
-        queue.push([i, influence, countryId]);
-      }
+    
+    // Calculer le nombre de points supplémentaires proportionnels à la superficie
+    const area = this.width * this.height;
+    const baseAdditionalPoints = Math.floor(area / 8000); // ~1 point par 8000 pixels
+    
+    let rngState = seed;
+    const seededRandom = () => {
+      rngState = (rngState * 1103515245 + 12345) >>> 0;
+      return (rngState >>> 0) / 0x100000000;
+    };
+    
+    // Générer les points supplémentaires aléatoires
+    for (let i = 0; i < baseAdditionalPoints; i++) {
+      const x = Math.floor(seededRandom() * this.width);
+      const y = Math.floor(seededRandom() * this.height);
+      voronoiPoints.push([x, y]);
     }
-
-    // Tri une seule fois au départ par influence décroissante
-    queue.sort((a, b) => b[1] - a[1]);
-
-    let processed = 0;
-    let queueIndex = 0;
-
-    // Boucle principale: tant qu'il y a des pixels à traiter
-    while (queueIndex < queue.length) {
-      // Prendre le pixel avec la plus haute influence
-      const [pixelIdx, influence, countryId] = queue[queueIndex];
-      queueIndex++;
-
-      // Ignorer si déjà traité
-      if (visited[pixelIdx]) continue;
-      visited[pixelIdx] = 1;
-      processed++;
-
-      // Vérifier les 4 voisins
-      const x = pixelIdx % this.width;
-      const y = Math.floor(pixelIdx / this.width);
-
-      const neighbors = [
-        [x + 1, y],
-        [x - 1, y],
-        [x, y + 1],
-        [x, y - 1],
-      ];
-
-      for (const [nx, ny] of neighbors) {
-        if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
-
-        const neighborIdx = ny * this.width + nx;
+    
+    
+    // Créer la carte Voronoi simple (closest point)
+    this.voronoiRegionMap = new Uint32Array(this.width * this.height);
+    
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        let closestIdx = 0;
+        let closestDist = Infinity;
         
-        // Ignorer si déjà traité
-        if (visited[neighborIdx]) continue;
-
-        const altitude = this.heightMap[neighborIdx];
-
-        // Calculer la perte d'influence (y compris pour l'eau)
-        const loss = this._calculateInfluenceLoss(altitude, countryId);
-        let newInfluence = influence * (1 - loss);
-
-        // Vérifier si ce pixel contient une ville
-        const cityAtPixel = cityMap.get(neighborIdx);
-        if (cityAtPixel) {
-          // Booster l'influence avec le score de la ville
-          newInfluence = Math.max(newInfluence, cityAtPixel.score);
-        }
-
-        // Vérifier si cette nouvelle influence est meilleure que l'actuelle
-        const [currentInfluence] = this.influenceMap[neighborIdx];
-
-        // Très seuil minimal: on propage PARTOUT même avec une influence quasi nulle
-        // L'important c'est que chaque pixel soit assigné à un pays via influenceMap
-        if (newInfluence > currentInfluence) {
-          this.influenceMap[neighborIdx] = [newInfluence, countryId];
+        for (let i = 0; i < voronoiPoints.length; i++) {
+          const [px, py] = voronoiPoints[i];
+          const dx = px - x;
+          const dy = py - y;
+          const dist = dx * dx + dy * dy;
           
-          // Ajouter à la queue pour traitement futur - toujours
-          queue.push([neighborIdx, newInfluence, countryId]);
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestIdx = i;
+          }
+        }
+        
+        this.voronoiRegionMap[y * this.width + x] = closestIdx;
+      }
+    }
+    
+    this.voronoiPoints = voronoiPoints;
+    const voronoiTime = performance.now() - voronoiStart;
+  }
+
+  _assignPixelsThroughVoronoi(seed) {
+    /**
+     * Étape 3: Assigner les pixels aux pays via Voronoi + propagation avec déperdition
+     */
+    const assignStart = performance.now();
+    
+    // Initialiser la map d'influence basée sur Voronoi
+    this.influenceMap = new Array(this.width * this.height);
+    for (let i = 0; i < this.width * this.height; i++) {
+      this.influenceMap[i] = [0, -1];
+    }
+    
+    // Map: voronoi region index -> country id (ou -1 si non assigné)
+    const regionToCountry = new Int32Array(this.voronoiPoints.length);
+    regionToCountry.fill(-1);
+    
+    // Map: voronoi point index -> city (pour trouver le pays propriétaire)
+    const voronoiPointToCity = new Map();
+    for (let i = 0; i < this.voronoiPoints.length; i++) {
+      const point = this.voronoiPoints[i];
+      for (const city of this.cities) {
+        if (city.position[0] === point[0] && city.position[1] === point[1]) {
+          voronoiPointToCity.set(i, city);
+          break;
         }
       }
     }
-
-    const propagationTime = performance.now() - propagationStart;
-    console.log(`✓ Propagation complete: ${processed} pixels processed in ${propagationTime.toFixed(2)}ms`);
-  }
-
-  _calculateInfluenceLoss(altitude, countryId) {
-    // Malus TRÈS FORT pour l'eau (90% loss) pour qu'elle serve de pont temporaire
-    if (altitude <= SEA_LEVEL) {
-      return 0.90; // 90% loss dans l'eau = influence réduite de 90%
+    
+    // Assigner les régions Voronoi contenant les capitales ET les autres villes aux pays
+    // D'abord, assigner les capitales
+    for (let countryIdx = 0; countryIdx < this.countries.length; countryIdx++) {
+      const capital = this.countries[countryIdx].capitalCity;
+      const [cx, cy] = capital.position;
+      const capitalIdx = cy * this.width + cx;
+      const regionIdx = this.voronoiRegionMap[capitalIdx];
+      regionToCountry[regionIdx] = countryIdx;
     }
-
-    // Malus altitude: [0 - 0.2]% selon l'altitude terrestre [128 - 255]
-    // (altitude - SEA_LEVEL) / (255 - SEA_LEVEL) = 0 à 1
-    const altitudeRatio = Math.max(0, Math.min(1, (altitude - SEA_LEVEL) / (255 - SEA_LEVEL)));
-    const altitudeLoss = altitudeRatio * 0.002; // [0 - 0.2]%
-
-    // Perte aléatoire: [0 - 0.05]%
-    const randomSeed = (altitude * 73856093) ^ (countryId * 19349663);
-    let x = randomSeed >>> 0;
-    x ^= x << 13;
-    x ^= x >> 17;
-    x ^= x << 5;
-    const randomLoss = ((x >>> 0) / 0x100000000) * 0.0005; // [0 - 0.05]%
-
-    return Math.max(0, altitudeLoss + randomLoss); // Total max: 0.25%
-  }
-
-  _assignPixelsToCountries() {
-    // Assigner chaque pixel au pays avec l'influence la plus haute
-    for (let i = 0; i < this.width * this.height; i++) {
-      const [influence, countryId] = this.influenceMap[i];
-
-      if (countryId >= 0 && influence > 0) {
-        this.countries[countryId].addPixel(i);
+    
+    // Ensuite, assigner les autres villes à leur pays respectif si c'est possible
+    for (let i = 0; i < this.voronoiPoints.length; i++) {
+      const city = voronoiPointToCity.get(i);
+      if (city && regionToCountry[i] === -1) {
+        // Chercher le pays auquel appartient cette ville
+        for (let countryIdx = 0; countryIdx < this.countries.length; countryIdx++) {
+          if (this.countries[countryIdx].cities.includes(city)) {
+            regionToCountry[i] = countryIdx;
+            break;
+          }
+        }
       }
     }
-
-    // Retirer TOUS les pixels d'eau des pays
-    // La propagation a traversé l'eau pour créer des ponts entre îles, 
-    // mais on ne veut pas que les pays possèdent l'eau
+    
+    let rngState = seed;
+    const seededRandom = () => {
+      rngState = (rngState * 1103515245 + 12345) >>> 0;
+      return (rngState >>> 0) / 0x100000000;
+    };
+    
+    // Propagation d'influence avec déperdition aléatoire
+    // Utiliser une BFS depuis les régions assignées
+    const visited = new Uint8Array(this.voronoiPoints.length);
+    const queue = [];
+    
+    // Initialiser avec les régions des capitales (influence max = 1.0)
+    for (let i = 0; i < regionToCountry.length; i++) {
+      if (regionToCountry[i] >= 0) {
+        queue.push([i, 1.0, regionToCountry[i]]);
+        visited[i] = 1;
+      }
+    }
+    
+    // Récupérer les voisins des régions Voronoi (deux régions sont voisines si elles partagent une bordure)
+    const regionNeighbors = this._computeVoronoiNeighbors();
+    
+    // BFS avec propagation d'influence
+    while (queue.length > 0) {
+      const [regionIdx, influence, countryId] = queue.shift();
+      
+      if (!regionNeighbors.has(regionIdx)) continue;
+      
+      for (const neighborRegionIdx of regionNeighbors.get(regionIdx)) {
+        if (visited[neighborRegionIdx]) continue;
+        visited[neighborRegionIdx] = 1;
+        
+        // Appliquer une déperdition aléatoire (5-15% seulement)
+        const randomLoss = 0.05 + seededRandom() * 0.1;
+        const newInfluence = influence * (1 - randomLoss);
+        
+        // Ajouter à la queue seulement si influence > seuil minimal très bas
+        if (newInfluence > 0.01) {
+          regionToCountry[neighborRegionIdx] = countryId;
+          queue.push([neighborRegionIdx, newInfluence, countryId]);
+        }
+      }
+    }
+    
+    // Assigner les régions orphelines (non visitées) à leur plus proche région assignée
+    const unassignedRegions = [];
+    for (let i = 0; i < regionToCountry.length; i++) {
+      if (regionToCountry[i] === -1) {
+        unassignedRegions.push(i);
+      }
+    }
+    
+    if (unassignedRegions.length > 0) {
+      for (const unassignedRegionIdx of unassignedRegions) {
+        // Trouver la région assignée la plus proche
+        let closestRegion = -1;
+        
+        if (regionNeighbors.has(unassignedRegionIdx)) {
+          for (const neighborRegionIdx of regionNeighbors.get(unassignedRegionIdx)) {
+            if (regionToCountry[neighborRegionIdx] >= 0) {
+              closestRegion = neighborRegionIdx;
+              break;
+            }
+          }
+        }
+        
+        // Si pas de voisin assigné, chercher via BFS
+        if (closestRegion === -1) {
+          const bfsQueue = [unassignedRegionIdx];
+          const bfsVisited = new Set([unassignedRegionIdx]);
+          
+          while (bfsQueue.length > 0 && closestRegion === -1) {
+            const currentRegion = bfsQueue.shift();
+            
+            if (regionNeighbors.has(currentRegion)) {
+              for (const neighborRegionIdx of regionNeighbors.get(currentRegion)) {
+                if (!bfsVisited.has(neighborRegionIdx)) {
+                  bfsVisited.add(neighborRegionIdx);
+                  
+                  if (regionToCountry[neighborRegionIdx] >= 0) {
+                    closestRegion = neighborRegionIdx;
+                    break;
+                  }
+                  
+                  bfsQueue.push(neighborRegionIdx);
+                }
+              }
+            }
+          }
+        }
+        
+        // Assigner à la région la plus proche trouvée
+        if (closestRegion >= 0) {
+          regionToCountry[unassignedRegionIdx] = regionToCountry[closestRegion];
+        }
+      }
+    }
+    
+    // Assigner tous les pixels des régions Voronoi aux pays
+    for (let pixelIdx = 0; pixelIdx < this.width * this.height; pixelIdx++) {
+      const regionIdx = this.voronoiRegionMap[pixelIdx];
+      const countryId = regionToCountry[regionIdx];
+      
+      if (countryId >= 0) {
+        this.countries[countryId].addPixel(pixelIdx);
+      }
+    }
+    
+    // Retirer les pixels d'eau des pays
     for (let i = 0; i < this.width * this.height; i++) {
       const altitude = this.heightMap[i];
-      const [, countryId] = this.influenceMap[i];
       
-      if (altitude <= SEA_LEVEL && countryId >= 0) {
-        // C'est de l'eau assignée à un pays: la retirer définitivement
-        const country = this.countries[countryId];
-        const pixelIndex = country.pixels.indexOf(i);
-        if (pixelIndex > -1) {
-          country.pixels.splice(pixelIndex, 1);
-          country.area--;
+      if (altitude <= SEA_LEVEL) {
+        const regionIdx = this.voronoiRegionMap[i];
+        const countryId = regionToCountry[regionIdx];
+        
+        if (countryId >= 0) {
+          const country = this.countries[countryId];
+          const pixelIndex = country.pixels.indexOf(i);
+          if (pixelIndex > -1) {
+            country.pixels.splice(pixelIndex, 1);
+            country.area--;
+          }
         }
       }
     }
+    
+    const assignTime = performance.now() - assignStart;
+  }
 
-    console.log(`📍 Pixels assigned to countries (water removed)`);
+  _computeVoronoiNeighbors() {
+    /**
+     * Calcule les voisins des régions Voronoi
+     * Deux régions sont voisines si elles partagent une bordure (pixel voisin)
+     */
+    const neighbors = new Map();
+    
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const pixelIdx = y * this.width + x;
+        const regionIdx = this.voronoiRegionMap[pixelIdx];
+        
+        // Vérifier les 4 voisins
+        const neighborCoords = [
+          [x + 1, y],
+          [x - 1, y],
+          [x, y + 1],
+          [x, y - 1],
+        ];
+        
+        for (const [nx, ny] of neighborCoords) {
+          if (nx < 0 || nx >= this.width || ny < 0 || ny >= this.height) continue;
+          
+          const neighborPixelIdx = ny * this.width + nx;
+          const neighborRegionIdx = this.voronoiRegionMap[neighborPixelIdx];
+          
+          if (neighborRegionIdx !== regionIdx) {
+            // Ces deux régions sont voisines
+            if (!neighbors.has(regionIdx)) {
+              neighbors.set(regionIdx, new Set());
+            }
+            neighbors.get(regionIdx).add(neighborRegionIdx);
+          }
+        }
+      }
+    }
+    
+    return neighbors;
   }
 
   _handleIslands() {
-    console.log(`🏝️ Handling islands...`);
-    // Avec la nouvelle logique, l'eau n'est plus un obstacle
-    // Les îles se connectent naturellement via la propagation à travers l'eau (avec fort malus)
-    // Les pixels d'eau sont retirés dans _assignPixelsToCountries()
-    console.log(`✓ Islands handled via water propagation`);
+    // Islands handled via Voronoi-based approach
   }
 
   _reassignCapturedCities() {
-    // Pour chaque ville, vérifier si elle est capturée par un pays
+    // Pour chaque ville, vérifier si elle appartient à un pays
+    // Les villes appartiennent déjà aux pays via la région Voronoi
     for (let cityIdx = 0; cityIdx < this.cities.length; cityIdx++) {
       const city = this.cities[cityIdx];
       const [x, y] = city.position;
-      const idx = y * this.width + x;
-      const [, ownerCountryId] = this.influenceMap[idx];
-
-      // Vérifier si la ville a un pays d'origine valide
-      // (elle peut ne pas être une capitale)
-      if (ownerCountryId >= 0 && ownerCountryId < this.countries.length) {
+      const pixelIdx = y * this.width + x;
+      const regionIdx = this.voronoiRegionMap[pixelIdx];
+      
+      // Trouver quel pays possède cette région
+      let ownerCountryId = -1;
+      for (let countryIdx = 0; countryIdx < this.countries.length; countryIdx++) {
+        // Vérifier si cette région appartient au pays
+        const hasPixel = this.countries[countryIdx].pixels.some(p => 
+          this.voronoiRegionMap[p] === regionIdx
+        );
+        if (hasPixel) {
+          ownerCountryId = countryIdx;
+          break;
+        }
+      }
+      
+      if (ownerCountryId >= 0) {
         const ownerCountry = this.countries[ownerCountryId];
-        
-        // Ajouter la ville au pays qui la contrôle
         if (!ownerCountry.cities.includes(city)) {
           ownerCountry.addCity(city);
         }
       }
-    }
-
-    console.log(`✓ Cities reassigned to their controlling countries`);
-  }
-
-  _placeSmallVillages(seed) {
-    let villagesPlaced = 0;
-    
-    // Créer une seed de base pour la génération des villages (différente de celle des villes)
-    const villageBaseSeed = getNextSeed(seed, 999);
-
-    // Pour chaque pays, placer 3-5 petits villages de manière déterministe
-    for (let countryIdx = 0; countryIdx < this.countries.length; countryIdx++) {
-      const country = this.countries[countryIdx];
-      
-      // Créer une seed unique et stable pour ce pays basée sur l'index
-      const countrySeed = getNextSeed(villageBaseSeed, countryIdx);
-      
-      // Seed séparée pour le nombre de villages (ne pas affecter les positions)
-      const numVillagesSeed = getNextSeed(countrySeed, 0);
-      let numRngState = numVillagesSeed;
-      const numRandom = () => {
-        numRngState = (numRngState * 1103515245 + 12345) >>> 0;
-        return (numRngState >>> 0) / 0x100000000;
-      };
-      
-      const numVillagesToPlace = 3 + Math.floor(numRandom() * 3); // Entre 3 et 5
-      
-      // Créer UNE SEULE FOIS la liste triée des pixels du pays (sans eau!)
-      // Utiliser country.pixels qui a déjà l'eau retirée
-      const countryPixels = [...country.pixels];
-      
-      if (countryPixels.length === 0) continue;
-      
-      countryPixels.sort((a, b) => a - b);
-      
-      // ÉTAPE 1: Créer des candidats pour TOUS les villages, pré-générés avec RNG
-      const villageSpecs = [];
-      for (let v = 0; v < numVillagesToPlace; v++) {
-        const villagePositionSeed = getNextSeed(numVillagesSeed, v + 1);
-        let positionRngState = villagePositionSeed;
-        
-        const positionRandom = () => {
-          positionRngState = (positionRngState * 1103515245 + 12345) >>> 0;
-          return (positionRngState >>> 0) / 0x100000000;
-        };
-        
-        // Générer 50 candidats de position
-        const positionCandidates = [];
-        for (let attempt = 0; attempt < 50; attempt++) {
-          const pixelIndex = Math.floor(positionRandom() * countryPixels.length);
-          positionCandidates.push(pixelIndex);
-        }
-        
-        villageSpecs.push({
-          villageIdx: v,
-          countrySeed,
-          positionCandidates,
-          placed: false,
-          position: null,
-          score: 0
-        });
-      }
-      
-      // ÉTAPE 2: Placer les villages en itérant sur les candidats
-      // Les candidats valides doivent être testés pour proximité
-      
-      for (let v = 0; v < villageSpecs.length; v++) {
-        const spec = villageSpecs[v];
-        let found = false;
-        
-        for (let attempt = 0; attempt < spec.positionCandidates.length && !found; attempt++) {
-          const selectedPixelIdx = countryPixels[spec.positionCandidates[attempt]];
-          
-          const x = selectedPixelIdx % this.width;
-          const y = Math.floor(selectedPixelIdx / this.width);
-
-          // Vérifier que le pixel est valide (pas l'eau)
-          if (this.heightMap[selectedPixelIdx] <= 0.4) continue; // SEA_LEVEL ~= 0.4
-
-          // Calculer le score potentiel de cet emplacement
-          const altitude = this.heightMap[selectedPixelIdx];
-          const climate = this.climateMap[selectedPixelIdx];
-          let pixelScore = this._calculateLocationScore(altitude, climate);
-          
-          // Vérifier que le score est < 100
-          if (pixelScore >= 100) continue;
-
-          // Vérifier qu'il n'y a pas déjà une ville trop proche
-          let tooClose = false;
-          for (const city of country.cities) {
-            const dist = Math.hypot(city.position[0] - x, city.position[1] - y);
-            if (dist < 30) { // Minimum 30 pixels de distance
-              tooClose = true;
-              break;
-            }
-          }
-
-          if (!tooClose) {
-            // Créer le petit village avec une seed déterministe unique
-            const villageSeed = getNextSeed(countrySeed, v + 1000);
-            
-            // Utiliser une seed séparée pour la variation du score (déterministe)
-            let scoreRngState = getNextSeed(countrySeed, v + 2000);
-            scoreRngState = (scoreRngState * 1103515245 + 12345) >>> 0;
-            const scoreVariation = ((scoreRngState >>> 0) / 0x100000000);
-            const villageScore = pixelScore * (0.9 + scoreVariation * 0.2); // Score avec variation ±10%
-            
-            const village = new City(
-              [x, y],
-              villageSeed,
-              Math.floor(altitude * 255),
-              Math.floor(climate * 255),
-              this.biomeMap[selectedPixelIdx]
-            );
-            village.score = villageScore;
-            village.generateFullData();
-            village.country = country.name;
-
-            country.addCity(village);
-            this.cities.push(village);
-            villagesPlaced++;
-            spec.placed = true;
-            spec.position = [x, y];
-            spec.score = villageScore;
-            found = true;
-          }
-        }
-      }
-    }
-
-    console.log(`✓ ${villagesPlaced} small villages placed (3-5 per country)`);
-    
-    // DEBUG: Log village positions for determinism testing
-    const villageData = this.cities
-      .filter(c => c.score < 100)
-      .map(c => ({
-        pos: `[${c.position[0]},${c.position[1]}]`,
-        score: c.score.toFixed(1),
-        name: c.name
-      }));
-    
-    if (villageData.length > 0) {
-      console.log(`🎯 Village Details:`);
-      villageData.forEach((v, i) => {
-        console.log(`  V${i + 1}: ${v.pos} Score=${v.score} Name="${v.name}"`);
-      });
-      
-      const positionString = villageData.map(v => v.pos).join('|');
-      console.log(`📍 VILLAGE_POSITIONS: ${positionString}`);
     }
   }
 

@@ -8,3 +8,4 @@ Génération de la map 7 en 36.47 s avec le seed 1014771852
 Génération de la map 8 en 41.65 s avec le seed 3122381684
 Génération de la map 9 en 38.03 s avec le seed 1824463324
 Génération de la map 10 en 39.43 s avec le seed 1202736860
+3672337074

@@ -1,0 +1,175 @@
+.cultures-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+.cultures-panel h2 {
+  padding: 12px 16px;
+  margin: 0;
+  border-bottom: 1px solid #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.cultures-panel .no-data {
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  font-style: italic;
+}
+
+.cultures-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.culture-card {
+  background-color: #2a2a2a;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.culture-card:hover {
+  background-color: #323232;
+  border-color: #505050;
+}
+
+.culture-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.culture-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.culture-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.culture-info .climate-type {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: #b0b0b0;
+}
+
+.culture-details {
+  font-size: 12px;
+  color: #c0c0c0;
+}
+
+.culture-details p {
+  margin: 6px 0;
+}
+
+.culture-details strong {
+  color: #e0e0e0;
+}
+
+.traits-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #404040;
+}
+
+.traits-section strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #e0e0e0;
+}
+
+.traits-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.traits-list li {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.trait-type {
+  font-weight: 600;
+  color: #00d4ff;
+  text-transform: capitalize;
+  min-width: 90px;
+}
+
+.trait-value {
+  color: #b0b0b0;
+  flex: 1;
+}
+
+.influences {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #404040;
+  font-size: 12px;
+}
+
+.influences strong {
+  color: #e0e0e0;
+  margin-right: 4px;
+}
+
+.followers-list {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #404040;
+}
+
+.followers-list strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #e0e0e0;
+}
+
+.followers-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.followers-list li {
+  font-size: 11px;
+  padding: 2px 4px;
+  color: #b0b0b0;
+}
+
+.follower-count {
+  color: #00ff00;
+  font-weight: 600;
+}
+
+.schisms {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #404040;
+  font-size: 12px;
+}
+
+.schisms strong {
+  color: #e0e0e0;
+}

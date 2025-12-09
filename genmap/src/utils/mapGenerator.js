@@ -8,6 +8,7 @@ import { generatePerlinNoise } from './perlin';
 import { generateVoronoi } from './voronoi';
 import { ProcNameGenerator } from './procNameGenerator';
 import { getNextSeed } from './seedGenerator';
+import { ReligionSystem } from './religionSystem';
 
 export const SEA_LEVEL = 127;
 
@@ -42,11 +43,8 @@ export class Map {
    * Génère la carte complète
    */
   generate() {
-    console.log(`Generating map ${this.width}x${this.height} with seed ${this.seed}`);
-
     try {
       // 1. Générer la carte de hauteur avec Perlin Noise
-      console.log('Step 1: Generating height map...');
       // Limiter la taille de la carte pour éviter les problèmes de performance
       const maxDimension = 2000;
       if (this.width > maxDimension || this.height > maxDimension) {
@@ -56,34 +54,25 @@ export class Map {
       this.heightMap = generatePerlinNoise(this.width, this.height, this.seed, 4); // Réduire octaves de 8 à 4
 
       // 2. Générer les biomes basés sur la hauteur
-      console.log('Step 2: Generating biomes...');
       this.generateBiomes();
 
       // 3. Générer le climat
-      console.log('Step 3: Generating climate...');
       this.generateClimate();
 
       // 4. Générer les rivières
-      console.log('Step 4: Generating rivers...');
       this.generateRivers();
 
       // 5. Générer les régions Voronoi
-      console.log('Step 5: Generating regions...');
       this.generateRegions();
 
       // 6. Générer les villes
-      console.log('Step 6: Generating cities...');
       this.generateCities();
 
       // 7. Générer les routes
-      console.log('Step 7: Generating routes...');
       this.generateRoutes();
 
       // 8. Générer les religions et cultures
-      console.log('Step 8: Generating religions and cultures...');
       this.generateReligionsAndCultures();
-
-      console.log('Map generation complete!');
     } catch (error) {
       console.error('Error generating map:', error);
       throw error;
@@ -303,27 +292,39 @@ export class Map {
    * Génère les religions et cultures pour les régions
    */
   generateReligionsAndCultures() {
+    // Créer le système de religion
+    this.religionSystem = new ReligionSystem(this.seed, this);
+
+    // 1. Générer les religions fondamentales
+    this.religionSystem.generateFoundationalReligions();
+
+    // 2. Propager les religions
+    this.religionSystem.propagateReligions();
+
+    // 3. Générer et propager les cultures
+    this.religionSystem.generateMajorCultures();
+
+    // Créer les cartes spatiales pour chaque pixel
     this.religions = new Uint32Array(this.width * this.height);
     this.cultures = new Uint32Array(this.width * this.height);
 
-    // Assigner des religions et cultures à chaque région
-    const numReligions = this.rng.randint(3, 8);
-    const numCultures = this.rng.randint(3, 8);
+    // Remplir les cartes spatiales basées sur les régions Voronoi
+    for (let pixelIdx = 0; pixelIdx < this.width * this.height; pixelIdx++) {
+      const regionId = this.voronoiRegionMap[pixelIdx];
 
-    for (let i = 0; i < numReligions; i++) {
-      const religionName = ProcNameGenerator.generateReligionName(getNextSeed(this.seed, i + 1));
-      this.religionNames.set(i, religionName);
-    }
+      // Assigner la religion de cette région
+      if (this.religionSystem.religionMap && this.religionSystem.religionMap.has(regionId)) {
+        this.religions[pixelIdx] = this.religionSystem.religionMap.get(regionId);
+      } else {
+        this.religions[pixelIdx] = 0; // Défaut
+      }
 
-    for (let i = 0; i < numCultures; i++) {
-      const cultureName = ProcNameGenerator.generateCultureName(getNextSeed(this.seed, numReligions + i + 1));
-      this.cultureNames.set(i, cultureName);
-    }
-
-    // Assigner aléatoirement aux pixels
-    for (let i = 0; i < this.width * this.height; i++) {
-      this.religions[i] = this.rng.randint(0, numReligions);
-      this.cultures[i] = this.rng.randint(0, numCultures);
+      // Assigner la culture de cette région
+      if (this.religionSystem.cultureMap && this.religionSystem.cultureMap.has(regionId)) {
+        this.cultures[pixelIdx] = this.religionSystem.cultureMap.get(regionId);
+      } else {
+        this.cultures[pixelIdx] = 0; // Défaut
+      }
     }
   }
 

@@ -1,0 +1,169 @@
+.religions-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+.religions-panel h2 {
+  padding: 12px 16px;
+  margin: 0;
+  border-bottom: 1px solid #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.religions-panel .no-data {
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  font-style: italic;
+}
+
+.religions-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.religion-card {
+  background-color: #2a2a2a;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.religion-card:hover {
+  background-color: #323232;
+  border-color: #505050;
+}
+
+.religion-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.religion-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.religion-info h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.religion-info .theme {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  color: #b0b0b0;
+}
+
+.religion-details {
+  font-size: 12px;
+  color: #c0c0c0;
+}
+
+.religion-details p {
+  margin: 6px 0;
+}
+
+.religion-details strong {
+  color: #e0e0e0;
+}
+
+.status {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.status-active {
+  background-color: #2a5a2a;
+  color: #00ff00;
+}
+
+.status-forgotten {
+  background-color: #3a3a3a;
+  color: #888888;
+}
+
+.status-secret {
+  background-color: #2a3a5a;
+  color: #6699ff;
+}
+
+.followers-list {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #1a1a1a;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.followers-list strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.followers-list ul {
+  margin: 0;
+  padding-left: 16px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.followers-list li {
+  margin: 4px 0;
+  color: #a0a0a0;
+}
+
+.follower-count {
+  color: #00cc00;
+  font-weight: 600;
+}
+
+.schisms {
+  margin-top: 8px;
+  padding: 6px;
+  background-color: #3a2a2a;
+  border-left: 2px solid #ff6b6b;
+  border-radius: 2px;
+  font-size: 11px;
+  color: #ffb0b0;
+}
+
+.schisms strong {
+  color: #ff8888;
+}
+
+/* Scrollbar styling */
+.religions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.religions-list::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+.religions-list::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+.religions-list::-webkit-scrollbar-thumb:hover {
+  background: #505050;
+}

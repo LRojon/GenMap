@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 
-const RoutesOverlay = ({ routes, config, activeTab, scale = 1 }) => {
+const RoutesOverlay = ({ routes, config, scale = 1 }) => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
@@ -16,7 +16,7 @@ const RoutesOverlay = ({ routes, config, activeTab, scale = 1 }) => {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Dessiner toutes les routes simplement: 1px marron foncé sans ombre
+    // Dessiner toutes les routes sur tous les onglets
     for (const route of routes) {
       const width = route.getWidth();
       const color = route.getColor();
@@ -39,7 +39,7 @@ const RoutesOverlay = ({ routes, config, activeTab, scale = 1 }) => {
       ctx.stroke();
     }
 
-  }, [routes, config, activeTab]);
+  }, [routes, config]);
 
   return (
     <canvas

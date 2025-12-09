@@ -33,7 +33,6 @@ export class RouteGenerator {
     this._validateRoutes();
 
     const routeTime = performance.now() - routeStart;
-    console.log(`✓ Routes generated in ${routeTime.toFixed(2)}ms`);
 
     return this.routes;
   }
@@ -85,7 +84,13 @@ export class RouteGenerator {
     edgesWithDist.sort((a, b) => a[2] - b[2]);
 
     for (const [i, j] of edgesWithDist) {
-      if (degree.get(i) < maxDegree && degree.get(j) < maxDegree) {
+      // Déterminer le maxDegree pour chaque ville
+      // Villages (score < 100) : maxDegree = 2
+      // Grandes villes (score >= 100) : maxDegree = 4
+      const maxDegreeI = this.cities[i].score < 100 ? 2 : maxDegree;
+      const maxDegreeJ = this.cities[j].score < 100 ? 2 : maxDegree;
+
+      if (degree.get(i) < maxDegreeI && degree.get(j) < maxDegreeJ) {
         filtered.push([i, j]);
         degree.set(i, degree.get(i) + 1);
         degree.set(j, degree.get(j) + 1);

@@ -6,6 +6,8 @@ import ClimateControlPanel from './components/ClimateControlPanel';
 import BiomeControlPanel from './components/BiomeControlPanel';
 import CountriesDetailsPanel from './components/CountriesDetailsPanel';
 import CitiesDetailsPanel from './components/CitiesDetailsPanel';
+import ReligionsDetailsPanel from './components/ReligionsDetailsPanel';
+import CulturesDetailsPanel from './components/CulturesDetailsPanel';
 
 function getInitialMapConfig() {
   return {
@@ -30,6 +32,9 @@ function App() {
   const [hoveredBiomeId, setHoveredBiomeId] = useState(null);
   const [hoveredCountry, setHoveredCountry] = useState(null);
   const [hoveredCity, setHoveredCity] = useState(null);
+  const [religions, setReligions] = useState([]);
+  const [cultures, setCultures] = useState([]);
+  const [religionSystem, setReligionSystem] = useState(null);
   const [generationId, setGenerationId] = useState(0); // Identifiant unique pour forcer les générations
 
   const tabs = [
@@ -50,9 +55,19 @@ function App() {
     setGenerationId(prev => prev + 1); // Force une génération même si le seed est identique
   }, []);
 
-  const handleMapGenerated = useCallback(() => {
-
+  const handleMapGenerated = useCallback((mapData) => {
     setIsGenerating(false);
+    if (mapData) {
+      if (mapData.religions) {
+        setReligions(mapData.religions);
+      }
+      if (mapData.cultures) {
+        setCultures(mapData.cultures);
+      }
+      if (mapData.religionSystem) {
+        setReligionSystem(mapData.religionSystem);
+      }
+    }
   }, []);
 
   return (
@@ -100,6 +115,16 @@ function App() {
           {activeTab === 'cities' && (
             <CitiesDetailsPanel 
               city={hoveredCity}
+            />
+          )}
+          {activeTab === 'religions' && (
+            <ReligionsDetailsPanel 
+              religions={religions}
+            />
+          )}
+          {activeTab === 'cultures' && (
+            <CulturesDetailsPanel 
+              cultures={cultures}
             />
           )}
         </div>

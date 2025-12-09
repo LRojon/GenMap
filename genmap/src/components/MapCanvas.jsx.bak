@@ -3,21 +3,17 @@ import './MapCanvas.css';
 import { getColorFromHeight, getColorFromClimate, getColorFromBiome, getColorFromRiver } from '../utils/colorPalette';
 import { Map } from '../utils/map';
 import CitiesPanel from './CitiesPanel';
-import CitiesOverlay from './CitiesOverlay';
 import CountriesPanel from './CountriesPanel';
 import RoutesOverlay from './RoutesOverlay';
 import VoronoiOverlay from './VoronoiOverlay';
 import ReligionsOverlay from './ReligionsOverlay';
-import CulturesOverlay from './CulturesOverlay';
 import CountriesDetailsPanel from './CountriesDetailsPanel';
 
 const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeTab, climateOpacity = 70, onBiomeHover, onCountryHover, onCityHover }) => {
     const canvasRef = useRef(null);
-    const climateCanvasRef = useRef(null);
-    const biomeCanvasRef = useRef(null);
-    const riverCanvasRef = useRef(null);
     const biomeMapRef = useRef(null);
     const generationAbortRef = useRef(null);
+    const mapDataRef = useRef(null); // Stocker toutes les données de la carte générée
     const [progress, setProgress] = useState(0);
     const [mapCities, setMapCities] = useState(null);
     const [mapCountries, setMapCountries] = useState(null);
@@ -25,11 +21,9 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
     const [voronoiRegionMap, setVoronoiRegionMap] = useState(null);
     const [voronoiPoints, setVoronoiPoints] = useState(null);
     const [mapReligions, setMapReligions] = useState(null);
-    const [religionMap, setReligionMap] = useState(null);
-    const [mapCultures, setMapCultures] = useState(null);
-    const [cultureMap, setCultureMap] = useState(null);
     const [hoveredCountry, setHoveredCountry] = useState(null);
     const [hoveredCity, setHoveredCity] = useState(null);
+    const [mapData, setMapData] = useState(null); // Données pour le rendu
 
     // Synchroniser le pays survolé avec le parent App
     useEffect(() => {
@@ -188,15 +182,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 
                 // Stocker les religions
                 setMapReligions(mapInstance.religions);
-                if (mapInstance.religionSystem && mapInstance.religionSystem.religionMap) {
-                  setReligionMap(mapInstance.religionSystem.religionMap);
-                }
-
-                // Stocker les cultures
-                setMapCultures(mapInstance.cultures);
-                if (mapInstance.religionSystem && mapInstance.religionSystem.culturePixelMap) {
-                  setCultureMap(mapInstance.religionSystem.culturePixelMap);
-                }
 
                 setProgress(100);
 
@@ -208,8 +193,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     countries: mapInstance.countries,
                     routes: mapInstance.routes,
                     religions: mapInstance.religions,
-                    cultures: mapInstance.cultures,
-                    religionSystem: mapInstance.religionSystem,
                 });
             } catch (error) {
                 if (!abortController.signal.aborted) {
@@ -270,7 +253,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     transformOrigin: 'center',
                     opacity: activeTab === 'climate' ? climateOpacity / 100 : 0,
                     pointerEvents: activeTab === 'climate' ? 'auto' : 'none',
-                    zIndex: 100,
                 }}
             />
             <canvas
@@ -317,13 +299,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                 <RoutesOverlay 
                     routes={mapRoutes} 
                     config={config} 
-                    scale={config.scale}
-                />
-            )}
-            {mapCities && (
-                <CitiesOverlay 
-                    cities={mapCities} 
-                    config={config} 
                     activeTab={activeTab}
                     scale={config.scale}
                 />
@@ -345,17 +320,6 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     config={config}
                     activeTab={activeTab}
                     scale={config.scale}
-                    religionMap={religionMap}
-                />
-            )}
-            {voronoiRegionMap && voronoiPoints && mapCultures && (
-                <CulturesOverlay 
-                    cultures={mapCultures}
-                    voronoiRegionMap={voronoiRegionMap}
-                    voronoiPoints={voronoiPoints}
-                    config={config}
-                    activeTab={activeTab}
-                    cultureMap={cultureMap}
                 />
             )}
             {isGenerating && (
