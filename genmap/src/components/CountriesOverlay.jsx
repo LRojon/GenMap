@@ -8,7 +8,10 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
   const [hoveredCountryId, setHoveredCountryId] = useState(null);
 
   useEffect(() => {
+    console.log('CountriesOverlay useEffect triggered, activeTab:', activeTab, 'countries.length:', countries?.length);
+    
     if (!canvasRef.current || !countries || countries.length === 0) {
+      console.log('Early return: canvas or countries missing');
       return;
     }
 
@@ -50,7 +53,6 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
     // Stocker la map pour détection
     countriesMapRef.current = pixelToCountry;
 
-    // Maintenant dessiner les frontières par-dessus
     // Première passe: identifier les pixels de bordure
     const borderPixels = new Set();
     
@@ -97,13 +99,15 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
       }
     }
 
-    // Deuxième passe: épaissir les frontières (2-3px)
+    console.log('DEBUG: borderPixels size:', borderPixels.size);
+
+    // Deuxième passe: épaissir les frontières (3-4px pour meilleure lisibilité)
     const thickBorders = new Set(borderPixels);
     for (const borderPixelIdx of borderPixels) {
       const x = borderPixelIdx % config.width;
       const y = Math.floor(borderPixelIdx / config.width);
 
-      // Ajouter les voisins immédiats (épaisseur ~2px)
+      // Ajouter les voisins immédiats + diagonales (épaisseur ~3-4px)
       const thickNeighbors = [
         [x + 1, y],
         [x - 1, y],
@@ -113,6 +117,10 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
         [x - 1, y - 1],
         [x + 1, y - 1],
         [x - 1, y + 1],
+        [x + 2, y],    // Épaisseur supplémentaire
+        [x - 2, y],
+        [x, y + 2],
+        [x, y - 2],
       ];
 
       for (const [nx, ny] of thickNeighbors) {
@@ -122,26 +130,50 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
       }
     }
 
-    // Troisième passe: dessiner les frontières épaissies avec la couleur du pays
+    // Troisième passe: dessiner les frontières épaissies avec couleur NOIRE OPAQUE pour visibilité
     for (const borderPixelIdx of thickBorders) {
       const currentCountry = pixelToCountry[borderPixelIdx];
       
       // Ne pas peindre sur de l'eau
       if (currentCountry === 0xFFFFFFFF) continue;
 
-      // Utiliser la couleur du pays (opaque)
-      const country = countries[currentCountry];
-      const rgb = this._hslToRgb(country.color);
-      
+      // Utiliser NOIR pour les frontières (très visible)
       const idx = borderPixelIdx * 4;
-      data[idx] = rgb[0];      // R
-      data[idx + 1] = rgb[1];  // G
-      data[idx + 2] = rgb[2];  // B
-      data[idx + 3] = 255; // Opacité complète
+      data[idx] = 0;        // R - noir
+      data[idx + 1] = 0;    // G - noir
+      data[idx + 2] = 0;    // B - noir
+      data[idx + 3] = 255;  // Opacité complète
     }
 
     // Dessiner tout d'un coup
     ctx.putImageData(imageData, 0, 0);
+
+    // Quatrième passe: redessiner les frontières PAR-DESSUS avec couleur BLANCHE pour DEBUG
+    // Créer une nouvelle couche pour les frontières
+    const borderImageData = ctx.createImageData(config.width, config.height);
+    const borderData = borderImageData.data;
+    borderData.fill(0); // Remplir de transparent
+
+    let borderPixelCount = 0;
+    for (const borderPixelIdx of thickBorders) {
+      const currentCountry = pixelToCountry[borderPixelIdx];
+      
+      // Ne pas peindre sur de l'eau
+      if (currentCountry === 0xFFFFFFFF) continue;
+
+      borderPixelCount++;
+      // BLANC BRILLANT pour bien voir les frontières
+      const idx = borderPixelIdx * 4;
+      borderData[idx] = 255;      // R - blanc
+      borderData[idx + 1] = 255;  // G - blanc
+      borderData[idx + 2] = 255;  // B - blanc
+      borderData[idx + 3] = 255;  // Opacité complète
+    }
+
+    console.log('DEBUG: thickBorders size:', thickBorders.size, 'pixels dessinés:', borderPixelCount);
+    
+    // Dessiner la couche de frontières par-dessus
+    ctx.putImageData(borderImageData, 0, 0);
 
     // Dessiner les villes par-dessus
     for (let countryId = 0; countryId < countries.length; countryId++) {
@@ -151,28 +183,54 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
       for (const city of country.cities) {
         const [cx, cy] = city.position;
         
-        // La capitale est plus grande
+        // La capitale est plus grande et distinctive
         const isCapital = city === country.capitalCity;
-        const radius = isCapital ? 5 : 3;
-        const opacity = isCapital ? 1.0 : 0.85;
         
-        // Cercle blanc semi-transparent
-        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-        ctx.beginPath();
-        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Bordure noire épaisse pour visibilité
-        ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        
-        // Ajouter un point central noir pour les capitales
         if (isCapital) {
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          // CAPITALE: Cercle doré avec halo
+          // Halo doré (arrière-plan)
+          ctx.fillStyle = 'rgba(255, 165, 0, 0.3)';
           ctx.beginPath();
-          ctx.arc(cx, cy, 1.5, 0, Math.PI * 2);
+          ctx.arc(cx, cy, 10, 0, Math.PI * 2);
           ctx.fill();
+          
+          // Cercle doré principal
+          ctx.fillStyle = 'rgba(255, 215, 0, 1.0)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Bordure noire épaisse
+          ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // Point central noir
+          ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Couronne au-dessus (emoji-like)
+          ctx.fillStyle = 'rgba(255, 215, 0, 1.0)';
+          ctx.font = 'bold 10px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('👑', cx, cy - 10);
+        } else {
+          // VILLE NORMALE: Cercle blanc petit
+          const radius = 4;
+          const opacity = 0.85;
+          
+          // Cercle blanc
+          ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Bordure noire fine
+          ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
       }
     }
@@ -262,10 +320,9 @@ const CountriesOverlay = ({ countries, config, activeTab, scale = 1 }) => {
         top: '50%',
         transform: `translate(-50%, -50%) scale(${scale})`,
         transformOrigin: 'center',
-        opacity: activeTab === 'countries' ? 0.7 : 0,
-        pointerEvents: activeTab === 'countries' ? 'auto' : 'none',
-        cursor: 'pointer',
-        zIndex: 2,
+        opacity: activeTab === 'countries' ? 1.0 : 0,
+        pointerEvents: 'none',
+        zIndex: 3,
       }}
     />
   );

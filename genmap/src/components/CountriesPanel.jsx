@@ -109,8 +109,6 @@ const CountriesPanel = ({ countries, config, activeTab, scale = 1, onCountryHove
     }
   };
 
-  const hoveredCountry = hoveredCountryId !== null ? countries[hoveredCountryId] : null;
-
   return (
     <>
       <canvas
@@ -123,7 +121,7 @@ const CountriesPanel = ({ countries, config, activeTab, scale = 1, onCountryHove
           top: '50%',
           transform: `translate(-50%, -50%) scale(${scale})`,
           transformOrigin: 'center',
-          opacity: activeTab === 'countries' ? 0.7 : 0,
+          opacity: activeTab === 'countries' ? 0.85 : 0,
           pointerEvents: activeTab === 'countries' ? 'auto' : 'none',
           cursor: 'pointer',
           zIndex: 2,

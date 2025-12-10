@@ -46,10 +46,14 @@ const RoutesOverlay = ({ routes, config, scale = 1 }) => {
       ref={canvasRef}
       className="map-canvas routes-overlay"
       style={{
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
         transform: `translate(-50%, -50%) scale(${scale})`,
         transformOrigin: 'center',
         opacity: 1,
         pointerEvents: 'none',
+        zIndex: 2,
       }}
     />
   );

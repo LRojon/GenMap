@@ -326,6 +326,7 @@ const MapCanvas = ({ config, generationId, onMapGenerated, isGenerating, activeT
                     config={config} 
                     activeTab={activeTab}
                     scale={config.scale}
+                    countries={mapCountries}
                 />
             )}
             {voronoiRegionMap && voronoiPoints && (

@@ -65,12 +65,17 @@ const CountriesDetailsPanel = ({ country }) => {
           <div className="cities-section">
             <div className="cities-title">🗺 Cities in this country</div>
             <div className="cities-list">
-              {country.cities.map((city, idx) => (
-                <div key={idx} className="city-item">
-                  <span className="city-name">{city.name}</span>
-                  {country.capitalCity === city && <span className="capital-badge">CAPITAL</span>}
-                </div>
-              ))}
+              {country.cities.map((city, idx) => {
+                const isCapital = country.capitalCity && country.capitalCity.position[0] === city.position[0] && country.capitalCity.position[1] === city.position[1];
+                return (
+                  <div key={idx} className={`city-item ${isCapital ? 'city-capital' : 'city-normal'}`}>
+                    <span className="city-icon">{isCapital ? '👑' : '🏘️'}</span>
+                    <span className="city-name">{city.name}</span>
+                    {isCapital && <span className="capital-badge">CAPITAL</span>}
+                    <span className="city-population">({Math.round(city.population).toLocaleString()})</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
